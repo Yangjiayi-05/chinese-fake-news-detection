@@ -51,4 +51,5 @@ def predict(text, model, vocab):
 
 if __name__ == '__main__':
     model, vocab = load_model_and_vocab()
-    print("模型和词表加载成功，请通过app.py输入文本")
+    print("Model and vocabulary loaded successfully. Please use app.py to input text.")
+    # print("模型和词表加载成功，请通过app.py输入文本")
