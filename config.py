@@ -3,7 +3,6 @@ import os
 # ===== 自动适配本地与 Kaggle 环境 =====
 if os.path.exists('/kaggle/input'):
     # 在 Kaggle 环境运行时
-    # 注意：'mcfend-processed-data' 是你稍后要在 Kaggle 上传的 Dataset 名字，保持一致
     PROCESSED_DIR = '/kaggle/input/mcfend-processed-data'
     CHECKPOINT_DIR = '/kaggle/working/checkpoints'
     FIGURES_DIR = '/kaggle/working/figures'
@@ -16,12 +15,24 @@ else:
     FIGURES_DIR = os.path.join(BASE_DIR, 'figures')
     LOGS_DIR = os.path.join(BASE_DIR, 'logs')
 
-# 自动创建目录
 os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 os.makedirs(LOGS_DIR, exist_ok=True)
 os.makedirs(FIGURES_DIR, exist_ok=True)
 
-# ===== 下面保留你原本的超参数 =====
-# 随机种子（跑多种子实验时改这里）
+# ===== 超参数 =====
 SEED = 42    # 可选：42 / 123 / 2024
-...
+BATCH_SIZE = 64
+EMBEDDING_DIM = 200
+HIDDEN_DIM = 128
+N_LAYERS = 1
+DROPOUT = 0.4
+LEARNING_RATE = 0.0005
+WEIGHT_DECAY = 5e-5
+LABEL_SMOOTHING = 0.05
+EPOCHS = 30
+PATIENCE = 5
+MAX_LEN = 200
+MIN_DELTA = 0.001
+
+# 模型选择：'fasttext' / 'bilstm' / 'bilstm_attention'
+MODEL_NAME = 'fasttext'
