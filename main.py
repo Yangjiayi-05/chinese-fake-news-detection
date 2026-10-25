@@ -68,7 +68,11 @@ def main():
         train_loss, train_acc = train_epoch(model, train_loader, optimizer, criterion, DEVICE)
         dev_loss, dev_acc, dev_prec, dev_rec, dev_f1, _, _ = evaluate(model, dev_loader, criterion, DEVICE)
 
-        log(f"Epoch {epoch:02d} | Train Loss: {train_loss:.4f} | Dev F1: {dev_f1:.4f}")
+        # ===== 这里恢复了详细的日志打印 =====
+        log(f"Epoch {epoch:02d} | "
+            f"Train Loss: {train_loss:.4f} Train Acc: {train_acc:.4f} | "
+            f"Dev Loss: {dev_loss:.4f} Dev Acc: {dev_acc:.4f} "
+            f"Dev P: {dev_prec:.4f} R: {dev_rec:.4f} F1: {dev_f1:.4f}")
 
         if dev_f1 > best_f1 + MIN_DELTA:
             best_f1 = dev_f1
