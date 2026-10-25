@@ -86,7 +86,7 @@ def main():
 
     log(f"Test Results | Acc: {test_acc:.4f} | P: {test_prec:.4f} | R: {test_rec:.4f} | F1: {test_f1:.4f}")
     
-    # Save outputs for visualization
+    # Save outputs for visualization and threshold optimization
     np.save(os.path.join(CHECKPOINT_DIR, f'test_labels_{MODEL_NAME}_seed{SEED}.npy'), np.array(test_labels))
     np.save(os.path.join(CHECKPOINT_DIR, f'test_preds_{MODEL_NAME}_seed{SEED}.npy'), np.array(test_preds))
     np.save(os.path.join(CHECKPOINT_DIR, f'test_probs_{MODEL_NAME}_seed{SEED}.npy'), np.array(test_probs))
