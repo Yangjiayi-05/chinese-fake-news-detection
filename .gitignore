@@ -1,1 +1,10 @@
-
+__pycache__/
+*.pkl
+*.pth
+*.npy
+logs/
+checkpoints/
+figures/
+data/
+.idea/
+.DS_Store
