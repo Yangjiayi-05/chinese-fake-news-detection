@@ -15,7 +15,7 @@ def load_model_and_vocab():
 
     model = BiLSTM_Attention(vocab_size, EMBEDDING_DIM, HIDDEN_DIM,
                              output_dim=2, n_layers=N_LAYERS, dropout=DROPOUT)
-    model.load_state_dict(torch.load(os.path.join(CHECKPOINT_DIR, 'p3_seed2024', 'best_bilstm_attention_seed2024.pth'), map_location=DEVICE))
+    model.load_state_dict(torch.load(os.path.join(CHECKPOINT_DIR, 'best_bilstm_attention_seed2024.pth'), map_location=DEVICE))
     model.to(DEVICE)
     model.eval()
     return model, vocab
