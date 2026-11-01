@@ -13,6 +13,14 @@ class BiLSTM_NoAttention(nn.Module):
 
     def forward(self, text):
         embedded = self.embedding(text)
-        lstm_out, _ = self.lstm(embedded)
-        context = torch.mean(lstm_out, dim=1)
+        lstm_out, _ = self.lstm(embedded) 
+        
+        # 1. 找到每个句子的真实长度（计算非0的个数）
+        lengths = (text != 0).sum(dim=1)
+        # 2. 防止某个句子全是0（极端情况），将最小长度设为1
+        lengths = torch.clamp(lengths, min=1) - 1 
+        # 3. 只提取每个句子最后一个真实词的输出
+        batch_size = lstm_out.size(0)
+        context = lstm_out[torch.arange(batch_size), lengths]
+        
         return self.fc(self.dropout(context))
