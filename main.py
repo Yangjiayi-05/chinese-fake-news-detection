@@ -56,7 +56,13 @@ def main():
     test_loader = create_data_loader(os.path.join(PROCESSED_DIR, 'test.pkl'), BATCH_SIZE, shuffle=False)
 
     model = build_model(MODEL_NAME, vocab_size).to(DEVICE)
-    class_weights = torch.tensor([1.0, 2.0]).to(DEVICE)
+    
+    # 动态计算权重，解决类别不平衡
+    # 训练集为12266条，标签0(谣言)约8280，标签1(事实)约3986
+    weight_0 = 12266 / (2.0 * 8280) 
+    weight_1 = 12266 / (2.0 * 3986) 
+    class_weights = torch.tensor([weight_0, weight_1], dtype=torch.float).to(DEVICE)
+    
     criterion = nn.CrossEntropyLoss(weight=class_weights, label_smoothing=LABEL_SMOOTHING)
     optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
 
@@ -66,13 +72,12 @@ def main():
     counter = 0
     for epoch in range(1, EPOCHS + 1):
         train_loss, train_acc = train_epoch(model, train_loader, optimizer, criterion, DEVICE)
-        dev_loss, dev_acc, dev_prec, dev_rec, dev_f1, _, _ = evaluate(model, dev_loader, criterion, DEVICE)
+        dev_loss, dev_acc, dev_prec, dev_rec, dev_f1, dev_macro_f1, _, _ = evaluate(model, dev_loader, criterion, DEVICE)
 
-        # ===== 这里恢复了详细的日志打印 =====
         log(f"Epoch {epoch:02d} | "
             f"Train Loss: {train_loss:.4f} Train Acc: {train_acc:.4f} | "
             f"Dev Loss: {dev_loss:.4f} Dev Acc: {dev_acc:.4f} "
-            f"Dev P: {dev_prec:.4f} R: {dev_rec:.4f} F1: {dev_f1:.4f}")
+            f"Dev P: {dev_prec:.4f} R: {dev_rec:.4f} F1: {dev_f1:.4f} Macro-F1: {dev_macro_f1:.4f}")
 
         if dev_f1 > best_f1 + MIN_DELTA:
             best_f1 = dev_f1
@@ -84,13 +89,11 @@ def main():
                 log("Early stopping triggered.")
                 break
 
-    # Evaluate on Test Set
     model.load_state_dict(torch.load(save_path))
-    test_loss, test_acc, test_prec, test_rec, test_f1, test_labels, test_preds, test_probs = evaluate(model, test_loader, criterion, DEVICE, return_probs=True)
+    test_loss, test_acc, test_prec, test_rec, test_f1, test_macro_f1, test_labels, test_preds, test_probs = evaluate(model, test_loader, criterion, DEVICE, return_probs=True)
 
-    log(f"Test Results | Acc: {test_acc:.4f} | P: {test_prec:.4f} | R: {test_rec:.4f} | F1: {test_f1:.4f}")
+    log(f"Test Results | Acc: {test_acc:.4f} | P: {test_prec:.4f} | R: {test_rec:.4f} | F1: {test_f1:.4f} | Macro-F1: {test_macro_f1:.4f}")
     
-    # Save outputs for visualization and threshold optimization
     np.save(os.path.join(CHECKPOINT_DIR, f'test_labels_{MODEL_NAME}_seed{SEED}.npy'), np.array(test_labels))
     np.save(os.path.join(CHECKPOINT_DIR, f'test_preds_{MODEL_NAME}_seed{SEED}.npy'), np.array(test_preds))
     np.save(os.path.join(CHECKPOINT_DIR, f'test_probs_{MODEL_NAME}_seed{SEED}.npy'), np.array(test_probs))
