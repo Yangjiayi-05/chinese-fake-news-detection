@@ -57,12 +57,14 @@ def evaluate(model, data_loader, criterion, device, return_probs=False):
             
             all_preds.extend(preds.cpu().numpy())
             all_labels.extend(labels.cpu().numpy())
-            all_probs.extend(probs[:, 0].cpu().numpy())
+            all_probs.extend(probs[:, 1].cpu().numpy()) # 记录类别1(事实)的概率
             
     avg_loss = total_loss / len(data_loader)
     acc = accuracy_score(all_labels, all_preds)
+    # 增加 macro 计算，适配不平衡数据
     precision, recall, f1, _ = precision_recall_fscore_support(all_labels, all_preds, average='binary')
+    _, _, macro_f1, _ = precision_recall_fscore_support(all_labels, all_preds, average='macro')
     
     if return_probs:
-        return avg_loss, acc, precision, recall, f1, all_labels, all_preds, all_probs
-    return avg_loss, acc, precision, recall, f1, all_labels, all_preds
+        return avg_loss, acc, precision, recall, f1, macro_f1, all_labels, all_preds, all_probs
+    return avg_loss, acc, precision, recall, f1, macro_f1, all_labels, all_preds
