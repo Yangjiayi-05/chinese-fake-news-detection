@@ -2,15 +2,17 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 import os
+import platform
 from config import FIGURES_DIR
 
-# 使用纯英文字体，避免 Kaggle/Linux 环境下的中文乱码报错
-plt.rcParams['font.sans-serif'] = ['Arial']
+# 跨平台字体自适应：Windows 用黑体，Linux(Kaggle) 用英文防乱码
+if platform.system() == 'Windows':
+    plt.rcParams['font.sans-serif'] = ['SimHei']
+else:
+    plt.rcParams['font.sans-serif'] = ['Arial']
 plt.rcParams['axes.unicode_minus'] = False
 
-
 def plot_training_curve(log_path, save_name):
-    """Plot training loss and F1 curve from log file."""
     epochs, train_loss, dev_loss, train_acc, dev_acc, dev_f1 = [], [], [], [], [], []
     with open(log_path, 'r', encoding='utf-8') as f:
         for line in f:
@@ -18,7 +20,7 @@ def plot_training_curve(log_path, save_name):
                 parts = line.split('|')
                 ep = int(parts[0].split()[1])
                 tl = float(parts[1].split('Train Loss:')[1].split()[0])
-                # 兼容新旧日志格式
+                
                 if 'Train Acc:' in parts[1]:
                     ta = float(parts[1].split('Train Acc:')[1].split()[0])
                 else:
@@ -33,7 +35,6 @@ def plot_training_curve(log_path, save_name):
 
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
     
-    # Loss Curve
     axes[0].plot(epochs, train_loss, 'b-o', label='Train Loss')
     axes[0].set_xlabel('Epoch')
     axes[0].set_ylabel('Loss')
@@ -41,7 +42,6 @@ def plot_training_curve(log_path, save_name):
     axes[0].legend()
     axes[0].grid(True)
 
-    # F1 Curve
     axes[1].plot(epochs, dev_f1, 'r-o', label='Dev F1')
     axes[1].set_xlabel('Epoch')
     axes[1].set_ylabel('F1 Score')
@@ -55,7 +55,6 @@ def plot_training_curve(log_path, save_name):
     plt.savefig(save_path, dpi=300, bbox_inches='tight')
     plt.close()
     print(f"Saved: {save_path}")
-
 
 def plot_confusion_matrix(y_true, y_pred, save_name='confusion_matrix_en.png', title='Confusion Matrix'):
     from sklearn.metrics import confusion_matrix
@@ -72,10 +71,8 @@ def plot_confusion_matrix(y_true, y_pred, save_name='confusion_matrix_en.png', t
     plt.close()
     print(f"Saved: {save_path}")
 
-
 def plot_attention_heatmap(tokens, weights, save_name='attention_heatmap.png',
                            pred_label=None, true_label=None, confidence=None):
-    """Plot attention weights for a single sample."""
     plt.figure(figsize=(max(8, len(tokens) * 0.6), 2.5))
     sns.heatmap([weights], xticklabels=tokens, yticklabels=['Attention'],
                 cmap='YlOrRd', cbar=True, annot=False)
@@ -97,9 +94,7 @@ def plot_attention_heatmap(tokens, weights, save_name='attention_heatmap.png',
     plt.close()
     print(f"Saved: {save_path}")
 
-
 def plot_model_comparison(results, save_name='model_comparison_avg.png'):
-    """Plot bar chart comparing different models."""
     models = list(results.keys())
     f1s = list(results.values())
     colors = ['#4C72B0', '#DD8452', '#55A868', '#C44E52']
