@@ -26,7 +26,7 @@ EMBEDDING_DIM = 300      # Increased from 200
 HIDDEN_DIM = 256         # Increased from 128
 N_LAYERS = 1
 
-# ⭐️ 改成以下参数（大幅增加正则化）：
+# 大幅增加正则化：
 DROPOUT = 0.6           # 把丢弃率提高，强迫模型不依赖单一神经元
 LEARNING_RATE = 0.0003  # 学习率降低，让模型收敛更平滑
 WEIGHT_DECAY = 1e-4     # 增加 L2 正则化惩罚
