@@ -57,11 +57,18 @@ def main():
 
     model = build_model(MODEL_NAME, vocab_size).to(DEVICE)
     
-    # 动态计算权重，解决类别不平衡
-    # 训练集为12266条，标签0(谣言)约8280，标签1(事实)约3986
-    weight_0 = 12266 / (2.0 * 8280) 
-    weight_1 = 12266 / (2.0 * 3986) 
+    # 自动计算类别权重：基于当前去重后的 train.pkl 真实分布
+    with open(os.path.join(PROCESSED_DIR, 'train.pkl'), 'rb') as f:
+        train_data = pickle.load(f)
+    y_train = train_data['y']
+    num_0 = y_train.count(0)
+    num_1 = y_train.count(1)
+    total = len(y_train)
+    
+    weight_0 = total / (2.0 * num_0)
+    weight_1 = total / (2.0 * num_1)
     class_weights = torch.tensor([weight_0, weight_1], dtype=torch.float).to(DEVICE)
+    log(f"类别分布: Class 0={num_0}, Class 1={num_1}. 权重: {weight_0:.4f}, {weight_1:.4f}")
     
     criterion = nn.CrossEntropyLoss(weight=class_weights, label_smoothing=LABEL_SMOOTHING)
     optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
