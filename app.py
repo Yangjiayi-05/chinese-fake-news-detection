@@ -11,18 +11,18 @@ st.markdown("系统采用三档预警机制，对于模糊样本建议人工复�
 
 LOG_FILE = os.path.join(LOGS_DIR, 'external_verification_log.csv')
 
-def save_log(text, label, conf, top_words, true_label, correct, status):
+def save_log(text, label, p_real, top_words, true_label, correct, status):
     os.makedirs(LOGS_DIR, exist_ok=True)
     file_exists = os.path.isfile(LOG_FILE)
     with open(LOG_FILE, 'a', newline='', encoding='utf-8-sig') as f:
         writer = csv.writer(f)
         if not file_exists:
-            writer.writerow(['time', 'text', 'model_pred', 'confidence',
+            writer.writerow(['time', 'text', 'model_pred', 'p_real',
                              'top_words', 'true_label', 'correct', 'status'])
         top_str = '; '.join([f"{w}:{s}" for w, s in top_words])
         writer.writerow([
             datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            text, label, f"{conf:.4f}", top_str,
+            text, label, f"{p_real:.4f}", top_str,
             true_label, correct, status
         ])
 
@@ -45,26 +45,24 @@ if st.button("开始检测"):
     if text.strip() == "":
         st.warning("请输入文本。")
     else:
-        label, conf, words = predict(text, model, vocab)
+        label, p_real, words = predict(text, model, vocab)
         
         # 阈值设定为 0.43，用于三档预警
         THRESHOLD = 0.43
         
-        # 计算模型认为属于类别1(事实)的概率
-        p_real = conf if label == '真实' else 1.0 - conf
-        
-        if p_real >= (1 - THRESHOLD):
+        # p_real 是模型判定为“事实”的概率
+        if p_real >= (1 - THRESHOLD):  # 即 >= 0.57
             status = "高置信事实"
-            st.success(f"✅ 模型判定：**【高置信事实】**")
-            st.write(f"系统认为它是真实新闻（置信度：{p_real:.4f} > {1-THRESHOLD}），直接放行。")
-        elif p_real <= THRESHOLD:
+            st.success("✅ 模型判定：**【高置信事实】**")
+            st.write(f"系统认为它是真实新闻（事实概率：{p_real:.4f}），直接放行。")
+        elif p_real <= THRESHOLD:      # 即 <= 0.43
             status = "高置信谣言"
-            st.error(f"🚨 模型判定：**【高置信谣言】**")
-            st.write(f"系统认为它是虚假新闻（属于事实的概率：{p_real:.4f} < {THRESHOLD}），红色预警。")
+            st.error("🚨 模型判定：**【高置信谣言】**")
+            st.write(f"系统认为它是虚假新闻（事实概率仅：{p_real:.4f}），红色预警。")
         else:
             status = "建议人工复核"
-            st.warning(f"⚠️ 模型判定：**【模糊区间，建议人工复核】**")
-            st.write(f"系统置信度（属于事实的概率：{p_real:.4f}）落入 [{THRESHOLD}, {1-THRESHOLD}] 的模糊带，请人工确认。")
+            st.warning("⚠️ 模型判定：**【模糊区间，建议人工复核】**")
+            st.write(f"系统置信度（事实概率：{p_real:.4f}）落入 [{THRESHOLD}, {1-THRESHOLD}] 的模糊带，请人工确认。")
         
         st.info("**模型关注的关键词（注意力机制提取的线索）：**")
         for w, score in words:
@@ -80,5 +78,5 @@ if st.button("开始检测"):
             true_label = "虚假"
             correct = "✅" if label == "虚假" else "❌"
 
-        save_log(text, label, conf, words, true_label, correct, status)
+        save_log(text, label, p_real, words, true_label, correct, status)
         st.caption("检测记录已保存。")
