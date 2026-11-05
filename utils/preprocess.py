@@ -86,7 +86,7 @@ def main():
     processed_dir = os.path.join(BASE_DIR, 'data', 'processed')
     os.makedirs(processed_dir, exist_ok=True)
 
-    MAX_LEN = 200
+    MAX_LEN = 256
     MIN_FREQ = 2
 
     print("加载数据...")
