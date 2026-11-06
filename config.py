@@ -22,22 +22,35 @@ RAW_CSV = _first_existing([
     '/kaggle/input/mcfend/mcfend/news.csv',
 ])
 
+# ==================== 划分方式 ====================
+# 'random'：随机分层划分，快；但同源新闻会跨训练/测试，存在数据泄漏
+# 'group' ：按重复簇分组划分，近似重复的样本绑在同一侧，泄漏为 0
+# 切换方式：Windows  set CFND_SPLIT=random  /  Linux  export CFND_SPLIT=random
+SPLIT_MODE = os.environ.get('CFND_SPLIT', 'group')
+SPLIT_SEED = 42
+PROCESSED_SUBDIR = 'processed' if SPLIT_MODE == 'random' else 'processed_group'
+
+# 分组划分的两个超参
+GROUP_CONT_RATIO = 0.8     # 两条样本的内容包含度超过它，判为同一簇
+GROUP_TEMPLATE_DF = 0.02   # 出现在 2% 以上文档里的 n-gram 视为模板，聚类前剔除
+
+
 def _resolve_kaggle_processed(input_root='/kaggle/input'):
     """在 Kaggle 的只读挂载区里找到预处理数据。
 
-    先按约定的数据集名尝试，找不到再扫一层 */processed 兜底；
+    先按约定的数据集名尝试，找不到再扫一层通配兜底；
     这样即使数据集改了名字，只要里面有 vocab.pkl 就能跑起来。
     """
     candidates = [
-        os.path.join(input_root, 'mcfend-processed-data', 'processed'),
+        os.path.join(input_root, 'mcfend-processed-data', PROCESSED_SUBDIR),
         os.path.join(input_root, 'datasets', 'yanghuanhuan05',
-                     'mcfend-processed-data', 'processed'),
+                     'mcfend-processed-data', PROCESSED_SUBDIR),
     ]
     for path in candidates:
         if os.path.exists(os.path.join(path, 'vocab.pkl')):
             return path
-    for path in (glob.glob(os.path.join(input_root, '*', 'processed'))
-                 + glob.glob(os.path.join(input_root, '*', '*', 'processed'))):
+    for path in (glob.glob(os.path.join(input_root, '*', PROCESSED_SUBDIR))
+                 + glob.glob(os.path.join(input_root, '*', '*', PROCESSED_SUBDIR))):
         if os.path.exists(os.path.join(path, 'vocab.pkl')):
             return path
     return candidates[0]
@@ -48,7 +61,7 @@ if IS_KAGGLE:
     PROCESSED_DIR = _resolve_kaggle_processed()
     WORK_DIR = '/kaggle/working'
 else:
-    PROCESSED_DIR = os.path.join(BASE_DIR, 'data', 'processed')
+    PROCESSED_DIR = os.path.join(BASE_DIR, 'data', PROCESSED_SUBDIR)
     WORK_DIR = BASE_DIR
 
 CHECKPOINT_DIR = os.path.join(WORK_DIR, 'checkpoints')

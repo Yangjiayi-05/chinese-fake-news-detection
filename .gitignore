@@ -20,6 +20,8 @@ MCFEND_original_dataset/
 data/raw/
 data/processed/*
 !data/processed/vocab.pkl
+data/processed_group/*
+!data/processed_group/vocab.pkl
 
 # 权重只在训练时产生；只放行部署用的那一个
 checkpoints/*

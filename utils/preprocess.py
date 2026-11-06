@@ -1,8 +1,12 @@
 # -*- coding: utf-8 -*-
-"""数据预处理：MCFEND 中文平台合并版 -> 全量清洗 -> 7:1.5:1.5 分层划分。
+"""数据预处理：MCFEND 中文平台合并版 -> 全量清洗 -> 分词 -> 划分 -> 建词表。
 
-刻意不做 SimHash 近似去重：去重会把 17,524 条砍到约 4,400 条，训练集只剩约 3,100，
-对参数量百万级的轻量模型属于严重欠拟合，因此只做基础清洗。
+两种划分方式（由 config.SPLIT_MODE 决定，环境变量 CFND_SPLIT 可切换）：
+    random：随机分层划分，实现简单，但同源转载的新闻会跨训练/测试，存在泄漏；
+    group ：按重复簇分组划分，近似重复的样本绑在同一侧，泄漏为 0，样本一条不删。
+
+刻意不做 SimHash 删除：去重会把 17,524 条砍到约 4,400 条，训练集只剩约 3,100，
+对参数量 660 万的轻量模型属于严重欠采样，因此只做基础清洗。
 """
 import json
 import os
@@ -13,12 +17,12 @@ from collections import Counter
 
 import jieba
 import pandas as pd
-from sklearn.model_selection import train_test_split
 
 # 允许直接执行 python utils/preprocess.py：把项目根目录加入模块搜索路径
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config  # noqa: E402
+from utils.split import assign_clusters, build_clusters  # noqa: E402
 
 CN_PLATFORMS = ['微博', '新浪', '腾讯', '界面', '网易', '搜狐',
                 '百家号', '凤凰', '腾讯新闻较真平台', '中国互联网联合辟谣平台']
@@ -70,7 +74,7 @@ def build_vocab(tokenized_texts, min_freq=2):
     for tokens in tokenized_texts:
         word_counts.update(tokens)
     kept = [w for w, f in word_counts.items() if f >= min_freq]
-    # 按词频降序排序，保证多次运行词表顺序一致，索引可复现
+    # 按词频降序排序，保证多次运行词表顺序一致、索引可复现
     kept.sort(key=lambda w: (-word_counts[w], w))
     idx2word = ['<PAD>', '<UNK>'] + kept
     word2idx = {w: i for i, w in enumerate(idx2word)}
@@ -91,16 +95,13 @@ def main():
     # Kaggle 的 /kaggle/input 是只读挂载区，预处理只应在本地做一次
     if config.IS_KAGGLE:
         raise SystemExit(
-            'Kaggle 上不需要跑预处理：请把本地生成的 data/processed 作为 Dataset 挂载，'
+            'Kaggle 上不需要跑预处理：请把本地生成的目录作为 Dataset 挂载，'
             'config 会自动找到它。')
 
     csv_path = config.RAW_CSV
     if not os.path.exists(csv_path):
         raise FileNotFoundError(f'找不到原始数据：{csv_path}')
-
-    # Kaggle 上 processed 目录是只读挂载点，不能创建；本地必须真实创建，失败就报错
-    if not config.IS_KAGGLE:
-        os.makedirs(config.PROCESSED_DIR, exist_ok=True)
+    os.makedirs(config.PROCESSED_DIR, exist_ok=True)
 
     print(f'[1/5] 读取原始数据：{csv_path}')
     df = load_data(csv_path)
@@ -116,12 +117,31 @@ def main():
           f'p99 {int(tok_len.quantile(0.99))}，最大 {int(tok_len.max())}')
     print(f'      MAX_LEN={config.MAX_LEN} 截断率：{trunc_rate:.2%}')
 
-    print('[3/5] 分层划分 7 : 1.5 : 1.5')
-    train_df, tmp_df = train_test_split(
-        df, test_size=0.3, random_state=42, stratify=df['label_binary'])
-    dev_df, test_df = train_test_split(
-        tmp_df, test_size=0.5, random_state=42, stratify=tmp_df['label_binary'])
+    labels = df['label_binary'].astype(int).tolist()
+    n_clusters = None
+
+    if config.SPLIT_MODE == 'group':
+        print('[3/5] 划分：按重复簇分组')
+        clusters = build_clusters(df['text'].tolist(),
+                                  cont_ratio=config.GROUP_CONT_RATIO,
+                                  template_df=config.GROUP_TEMPLATE_DF)
+        n_clusters = len(clusters)
+        print(f'      {n_clusters} 个重复簇，最大簇 {max(len(c) for c in clusters)} 条')
+        tr, dv, te = assign_clusters(clusters, labels)
+        train_df, dev_df, test_df = df.iloc[tr], df.iloc[dv], df.iloc[te]
+    else:
+        print('[3/5] 划分：随机分层 7 : 1.5 : 1.5')
+        from sklearn.model_selection import train_test_split
+        train_df, tmp_df = train_test_split(
+            df, test_size=0.3, random_state=config.SPLIT_SEED,
+            stratify=df['label_binary'])
+        dev_df, test_df = train_test_split(
+            tmp_df, test_size=0.5, random_state=config.SPLIT_SEED,
+            stratify=tmp_df['label_binary'])
+
     print(f'      训练集 {len(train_df)} / 验证集 {len(dev_df)} / 测试集 {len(test_df)}')
+    for name, sub in [('train', train_df), ('dev', dev_df), ('test', test_df)]:
+        print(f'      {name} 事实占比 {sub["label_binary"].mean():.2%}')
 
     print('[4/5] 构建词表')
     word2idx, idx2word = build_vocab(train_df['tokens'].tolist(), min_freq=2)
@@ -151,17 +171,25 @@ def main():
     # 口径存档：写论文时直接引用，不用回头猜当时的参数
     meta = {
         'source_csv': csv_path,
+        'split_mode': config.SPLIT_MODE,
         'total': len(df),
         'train': len(train_df),
         'dev': len(dev_df),
         'test': len(test_df),
+        'pos_rate': {
+            'train': round(float(train_df['label_binary'].mean()), 4),
+            'dev': round(float(dev_df['label_binary'].mean()), 4),
+            'test': round(float(test_df['label_binary'].mean()), 4),
+        },
         'vocab_size': len(word2idx),
         'max_len': config.MAX_LEN,
         'truncation_rate': round(trunc_rate, 6),
         'class_weight': class_weight,
         'label_counts': {str(k): int(v) for k, v in counts.items()},
+        'n_clusters': n_clusters,
+        'group_cont_ratio': config.GROUP_CONT_RATIO if config.SPLIT_MODE == 'group' else None,
+        'split_seed': config.SPLIT_SEED,
         'dedup': 'none',
-        'split_seed': 42,
     }
     with open(os.path.join(config.PROCESSED_DIR, 'meta.json'), 'w',
               encoding='utf-8') as f:

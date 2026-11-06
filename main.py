@@ -7,6 +7,7 @@
 用法：python main.py --model bilstm_attention --seed 42
 """
 import argparse
+import csv
 import json
 import os
 import pickle
@@ -114,6 +115,13 @@ def run(model_name, seed):
         save_path = os.path.join(config.CHECKPOINT_DIR, f'best_{tag}.pth')
         best_macro, best_epoch, counter = -1.0, 0, 0
 
+        # 每轮指标另存一份 csv，画训练曲线时直接读表，不用从日志文本里抠
+        curve_file = open(os.path.join(config.LOGS_DIR, f'curve_{tag}.csv'),
+                          'w', newline='', encoding='utf-8')
+        curve_writer = csv.writer(curve_file)
+        curve_writer.writerow(['epoch', 'train_loss', 'train_acc', 'dev_loss',
+                               'dev_acc', 'dev_f1', 'dev_macro_f1'])
+
         for epoch in range(1, config.EPOCHS + 1):
             train_loss, train_acc = train_epoch(model, train_loader, optimizer,
                                                 criterion, DEVICE)
@@ -131,10 +139,16 @@ def run(model_name, seed):
             log(f'Epoch {epoch:02d} | Train {train_loss:.4f}/{train_acc:.4f} | '
                 f'Dev {dev_loss:.4f}/{dev_acc:.4f} P {dev_p:.4f} R {dev_r:.4f} '
                 f'F1 {dev_f1:.4f} Macro-F1 {dev_macro:.4f}{flag}')
+            curve_writer.writerow([epoch, f'{train_loss:.6f}', f'{train_acc:.6f}',
+                                   f'{dev_loss:.6f}', f'{dev_acc:.6f}',
+                                   f'{dev_f1:.6f}', f'{dev_macro:.6f}'])
+            curve_file.flush()
+
             if counter >= config.PATIENCE:
                 log(f'早停：验证集 Macro-F1 连续 {config.PATIENCE} 轮未提升')
                 break
 
+        curve_file.close()
         log(f'最优 epoch = {best_epoch}，验证集 Macro-F1 = {best_macro:.4f}')
 
         # 回到最优权重再导出概率，保证阈值搜索用的是最优模型的输出
