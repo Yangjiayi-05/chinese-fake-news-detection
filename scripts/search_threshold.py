@@ -6,18 +6,22 @@
     在测试集上只用这个阈值报一次结果，不做二次挑选；
     用 bootstrap 给出测试集 Macro-F1 的 95% 置信区间。
 
-用法：
-    python search_threshold.py --model bilstm_attention --seed 42
-    python search_threshold.py --all
+用法（在项目根目录执行）：
+    python scripts/search_threshold.py --model bilstm_attention --seed 42
+    python scripts/search_threshold.py --all
 """
 import argparse
 import json
 import os
+import sys
 
 import numpy as np
 from sklearn.metrics import f1_score
 
-import config
+# 允许从 scripts/ 子目录执行：把项目根加入模块搜索路径
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import config  # noqa: E402
 
 
 def macro_f1_at(y, p_real, threshold):
@@ -69,7 +73,7 @@ def evaluate_one(tag):
         'test_macro_f1_at_threshold': round(macro_f1_at(test_y, test_p, threshold), 4),
         'ci95': [round(low, 4), round(high, 4)],
     }
-    os.makedirs(config.RESULTS_DIR, exist_ok=True)
+    config.ensure_dir(config.RESULTS_DIR)
     with open(os.path.join(config.RESULTS_DIR, f'threshold_{tag}.json'), 'w',
               encoding='utf-8') as f:
         json.dump(result, f, ensure_ascii=False, indent=2)

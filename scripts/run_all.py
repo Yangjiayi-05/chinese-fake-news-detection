@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """一键跑完 4 个模型 × 3 个种子，并汇总成"均值 ± 标准差"。
 
-用法：
-    python run_all.py
-    set CFND_PROFILE=tuned && python run_all.py        (Windows 切到调优档位)
+用法（在项目根目录执行）：
+    python scripts/run_all.py
+    set CFND_PROFILE=tuned && python scripts/run_all.py     (Windows 切到调优档位)
 
 产物：
     results/results.csv   逐次实验明细
@@ -11,11 +11,15 @@
 """
 import csv
 import os
+import sys
 
 import numpy as np
 
-import config
-from main import run
+# 允许从 scripts/ 子目录执行：把项目根加入模块搜索路径
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import config  # noqa: E402
+from main import run  # noqa: E402
 
 
 def summarize(rows):
@@ -40,7 +44,7 @@ def main():
             print(f'\n>>>>>>>>>> {model} | seed={seed} <<<<<<<<<<')
             rows.append(run(model, seed))
 
-    os.makedirs(config.RESULTS_DIR, exist_ok=True)
+    config.ensure_dir(config.RESULTS_DIR)
 
     detail_path = os.path.join(config.RESULTS_DIR, 'results.csv')
     with open(detail_path, 'w', newline='', encoding='utf-8-sig') as f:

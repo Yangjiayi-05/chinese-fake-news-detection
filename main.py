@@ -61,6 +61,8 @@ def run(model_name, seed):
     """完整跑一次实验，返回指标字典（同时写入 results 目录）。"""
     set_seed(seed)
     tag = f'{model_name}_seed{seed}'
+    for _d in (config.CHECKPOINT_DIR, config.LOGS_DIR, config.RESULTS_DIR):
+        config.ensure_dir(_d)
     log_path = os.path.join(config.LOGS_DIR, f'log_{tag}.txt')
 
     print(f'\n===== {tag} | profile={config.PROFILE} | device={DEVICE} =====')

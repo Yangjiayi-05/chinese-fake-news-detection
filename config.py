@@ -14,9 +14,9 @@ def _first_existing(paths):
     return paths[0]
 
 
-# 原始数据：本地解压目录优先，其次 Kaggle 挂载点（换 Kaggle 数据集名字时改这里即可）
+# 原始数据：本地统一放在 data/raw 下，其余是 Kaggle 挂载点候选
 RAW_CSV = _first_existing([
-    os.path.join(BASE_DIR, 'MCFEND_original_dataset', 'mcfend', 'news.csv'),
+    os.path.join(BASE_DIR, 'data', 'raw', 'mcfend', 'news.csv'),
     '/kaggle/input/mcfend-original-dataset/mcfend/news.csv',
     '/kaggle/input/mcfend/mcfend/news.csv',
 ])
@@ -37,11 +37,10 @@ LOGS_DIR = os.path.join(WORK_DIR, 'logs')
 FIGURES_DIR = os.path.join(WORK_DIR, 'figures')
 RESULTS_DIR = os.path.join(WORK_DIR, 'results')
 
-for _d in (CHECKPOINT_DIR, LOGS_DIR, FIGURES_DIR, RESULTS_DIR):
-    try:
-        os.makedirs(_d, exist_ok=True)
-    except OSError:
-        pass
+
+def ensure_dir(path):
+    """写文件之前再创建目录，避免 import config 时就在项目里堆出几个空文件夹。"""
+    os.makedirs(path, exist_ok=True)
 
 # 序列长度：预处理、训练、推理三处统一从这里取，避免训练 256 推理 200 的错位
 MAX_LEN = 256

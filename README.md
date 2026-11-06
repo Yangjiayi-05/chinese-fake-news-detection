@@ -35,8 +35,8 @@ BiLSTM 编码上下文，自注意力汇聚句向量（带 Padding Mask 屏蔽�
 
 | 平台 | 支持状态 | 数据读取位置 | 产物写入位置 | 备注 |
 |---|---|---|---|---|
-| **Windows 10 / 11** | ✅ 已验证 | `.\MCFEND_original_dataset\mcfend\news.csv` | 项目根目录下 `logs/` `results/` `checkpoints/` | 已在 Python 3.9.25 + torch 2.8.0+cpu 上跑通全流程 |
-| **Linux**（Ubuntu 20.04+） | ✅ 支持 | `./MCFEND_original_dataset/mcfend/news.csv` | 同上 | 文件名大小写敏感，请注意 `models/`、`utils/` 全小写 |
+| **Windows 10 / 11** | ✅ 已验证 | `.\data\raw\mcfend\news.csv` | 项目根目录下 `logs/` `results/` `checkpoints/` | 已在 Python 3.9.25 + torch 2.8.0+cpu 上跑通全流程 |
+| **Linux**（Ubuntu 20.04+） | ✅ 支持 | `./data/raw/mcfend/news.csv` | 同上 | 文件名大小写敏感，请注意 `models/`、`utils/` 全小写 |
 | **macOS**（Intel / Apple Silicon） | ✅ 支持 | 同 Linux | 同上 | M 系列芯片自动使用 MPS/CPU，无需改动 |
 | **Kaggle Notebook** | ✅ 已验证流程 | `/kaggle/input/<dataset>/processed` | `/kaggle/working/`（日志、权重、结果） | `/kaggle/input` 只读，会话结束后 working 不保留，记得下载产物 |
 
@@ -51,7 +51,7 @@ BiLSTM 编码上下文，自注意力汇聚句向量（带 Padding Mask 屏蔽�
 ```python
 # config.py 片段
 RAW_CSV = _first_existing([
-    os.path.join(BASE_DIR, 'MCFEND_original_dataset', 'mcfend', 'news.csv'),
+    os.path.join(BASE_DIR, 'data', 'raw', 'mcfend', 'news.csv'),
     '/kaggle/input/mcfend-original-dataset/mcfend/news.csv',
     '/kaggle/input/mcfend/mcfend/news.csv',
 ])
@@ -64,12 +64,12 @@ Kaggle 数据集改名后，只需往候选列表里加一行，其余代码不�
 **Windows（PowerShell）**
 
 ```powershell
-cd D:\chinese_fake_news_detection_mcfend
+cd D:\chinese-fake-news-detection
 conda activate nlp
 chcp 65001                      # 控制台切 UTF-8，避免中文日志乱码
 python utils\preprocess.py
-python run_all.py
-python search_threshold.py --all
+python scripts\run_all.py
+python scripts\search_threshold.py --all
 ```
 
 **Linux / macOS（bash）**
@@ -78,8 +78,8 @@ python search_threshold.py --all
 cd ~/chinese-fake-news-detection
 python3 -m pip install -r requirements.txt
 python3 utils/preprocess.py
-python3 run_all.py
-python3 search_threshold.py --all
+python3 scripts/run_all.py
+python3 scripts/search_threshold.py --all
 # 切换超参档位：export CFND_PROFILE=tuned
 ```
 
@@ -88,7 +88,7 @@ python3 search_threshold.py --all
 ```python
 !git clone https://github.com/Yangjiayi-05/chinese-fake-news-detection.git
 %cd chinese-fake-news-detection
-!python run_all.py
+!python scripts/run_all.py
 ```
 
 ### 2.4 平台差异与已知的坑
@@ -108,23 +108,24 @@ python3 search_threshold.py --all
 
 ```
 .
+├── app.py                  # 系统入口（Streamlit 三档预警）
 ├── config.py               # 全局配置：路径、长度、超参、阈值、种子（唯一真源）
 ├── main.py                 # 单次训练，按验证集 Macro-F1 早停与选模型
-├── run_all.py              # 4 模型 × 3 种子一键跑完，汇总 mean±std
-├── search_threshold.py     # 验证集搜索决策阈值 + 测试集 bootstrap 置信区间
 ├── inference.py            # 推理：事实概率 + 注意力关键词
-├── app.py                  # Streamlit 三档预警系统
-├── models/
-│   ├── fasttext.py         # 基线：词向量掩码平均 + 线性层
-│   ├── bilstm.py           # 基线：双向 LSTM 取末位隐状态
-│   ├── bilstm_avgpool.py   # 消融：掩码平均池化替代注意力
-│   └── bilstm_attention.py # 主模型：双向 LSTM + 掩码自注意力
-├── utils/
-│   ├── preprocess.py       # 清洗、分词、分层划分、建词表
-│   └── helper.py           # Dataset / DataLoader / 训练与评估
+├── models/                 # 4 个模型：fasttext / bilstm / bilstm_avgpool / bilstm_attention
+├── utils/                  # preprocess.py 数据管线，helper.py 训练与评估
+├── scripts/
+│   ├── run_all.py          # 4 模型 × 3 种子一键跑完，汇总 mean±std
+│   └── search_threshold.py # 验证集搜索决策阈值 + 测试集 bootstrap 置信区间
+├── data/
+│   ├── raw/                # 原始数据，不入库
+│   └── processed/          # 预处理产物，只入库 vocab.pkl
 ├── requirements.txt
 └── CITATION.cff
 ```
+
+运行产物（`logs/` `results/` `checkpoints/` `figures/`）由代码在需要时自动创建，
+不在仓库里预置空目录。
 
 ---
 
@@ -150,7 +151,7 @@ torch==2.2.1+cpu
 
 **第 1 步 · 预处理**
 
-把原始数据解压为 `MCFEND_original_dataset/mcfend/news.csv`，然后：
+把原始数据解压后放到 `data/raw/mcfend/news.csv`，然后：
 
 ```bash
 python utils/preprocess.py
@@ -172,7 +173,7 @@ MAX_LEN=256 截断率：0.76%
 **第 2 步 · 12 次实验**
 
 ```bash
-python run_all.py
+python scripts/run_all.py
 ```
 
 得到 `results/results.csv`（逐次明细）与 `results/summary.csv`（按模型的 mean ± std）。
@@ -180,7 +181,7 @@ python run_all.py
 **第 3 步 · 阈值搜索**
 
 ```bash
-python search_threshold.py --all
+python scripts/search_threshold.py --all
 ```
 
 在**验证集**上找使 Macro-F1 最大的分界线，在**测试集**上只报一次结果并给 95% 置信区间。
@@ -196,7 +197,7 @@ Kaggle 只作为算力，数据处理在本地完成：
 1. 本地跑完 `utils/preprocess.py`；
 2. 将 `data/processed/` 打包上传为 Kaggle Dataset，命名 `mcfend-processed-data`；
 3. Notebook 里 Add Data 挂载该数据集，并克隆本仓库；
-4. 直接 `python run_all.py`。
+4. 直接 `python scripts/run_all.py`。
 
 `config.py` 会自动在以下两个位置之间找到实际挂载路径：
 
