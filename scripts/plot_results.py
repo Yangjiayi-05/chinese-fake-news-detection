@@ -34,6 +34,9 @@ ABL = [('bilstm_attention', 'Full model', ''),
        ('bilstm_attention', 'w/o Class Weight', '_nocw'),
        ('bilstm_attention', 'w/o Word2Vec', '_now2v')]
 
+# 主实验后缀：默认空（带类权重那版）；--suffix _nocw 可画无类权重那版
+MAIN_SUFFIX = ''
+
 
 def tag_of(model, seed, suffix=''):
     return f'{model}_seed{seed}{suffix}'
@@ -92,7 +95,8 @@ def curves(models, path, title):
         ax = axes[idx // 2][idx % 2]
         series = []
         for seed in config.SEEDS:
-            f = os.path.join(config.LOGS_DIR, f'curve_{model}_seed{seed}.csv')
+            f = os.path.join(config.LOGS_DIR,
+                             f'curve_{tag_of(model, seed, MAIN_SUFFIX)}.csv')
             if not os.path.exists(f):
                 continue
             df = pd.read_csv(f)
@@ -155,7 +159,7 @@ def confusion(path):
     for ax, (model, label) in zip(axes, MAIN):
         total = np.zeros((2, 2), dtype=int)
         for seed in config.SEEDS:
-            tag = tag_of(model, seed)
+            tag = tag_of(model, seed, MAIN_SUFFIX)
             y = os.path.join(config.CHECKPOINT_DIR, f'test_labels_{tag}.npy')
             p = os.path.join(config.CHECKPOINT_DIR, f'test_preds_{tag}.npy')
             if os.path.exists(y) and os.path.exists(p):
@@ -177,9 +181,16 @@ def confusion(path):
 
 
 def main():
+    global MAIN_SUFFIX
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--suffix', default='',
+                    help='主实验后缀，如 _nocw 表示画无类权重那版')
+    MAIN_SUFFIX = ap.parse_args().suffix
+
     config.ensure_dir(config.FIGURES_DIR)
 
-    groups_main = [(m, lb, '') for m, lb in MAIN]
+    groups_main = [(m, lb, MAIN_SUFFIX) for m, lb in MAIN]
     groups_abl = [(m, lb, sf) for m, lb, sf in ABL]
     groups_all = groups_main + groups_abl[1:]
 
