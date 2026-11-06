@@ -5,7 +5,7 @@ BiLSTM 编码上下文，自注意力汇聚句向量（带 Padding Mask 屏蔽�
 注意力权重直接用于解释"模型为什么这样判"，并落地为三档预警的人机协同筛查系统。
 
 - **数据**：MCFEND 中文平台合并版，清洗后 17,524 条，7 : 1.5 : 1.5 分层划分
-- **模型**：2 个基线（FastText / BiLSTM）+ 核心（**BiLSTM+Attention**），3 个种子；另做 3 组消融与 2 组划分对照，合计 33 次实验
+- **模型**：2 个基线（FastText / BiLSTM）+ 核心（**BiLSTM+Attention**），3 个种子；另有 3 组消融、2 组划分对照与 3 档正则选择，合计 **33 次实验**（可选的无类权重基线补跑 6 次另计，共 **39 次**）
 - **主指标**：Macro-F1（应对 2.08 : 1 的类别不平衡），另报正类 P/R/F1 与 Accuracy
 - **应用**：Streamlit 三档预警（高置信谣言拦截 / 高置信事实放行 / 模糊区间人工复核）
 
@@ -180,6 +180,16 @@ MAX_LEN=256 截断率：0.76%
 
 **第 2 步 · 按阶段跑实验（33 次）**
 
+| 阶段 | 内容 | 次数 |
+|---|---|---|
+| 0 | 正则档位 A/B/C（核心模型） | 9 |
+| 1 | 主实验：3 模型 × 3 种子 | 9 |
+| 2 | 消融：无 mask / 无类权重 / 无词向量 | 9 |
+| 3 | 划分对照：随机 + 时间切分（各 3 次） | 6 |
+| | **小计** | **33** |
+| 可选 | 无类权重基线补跑（FastText + BiLSTM） | 6 |
+| | **合计** | **39** |
+
 ```bash
 # 阶段 0：正则档位 A/B/C，只跑核心模型，按验证集选优（9 次）
 python scripts/run_all.py --group reg
@@ -198,12 +208,14 @@ set CFND_SPLIT=time   && python scripts/run_all.py --group main --reg A --models
 得到 `results/results.csv`（逐次明细）与 `results/summary.csv`（按配置的 mean ± std）。
 对照组写入 `results_random/`、`results_time/`，不会覆盖主实验。
 
-**可选 · 无类权重的敏感性分析**（再 9 次，结果加 `_nocw` 后缀，不覆盖原结果）：
+**可选 · 无类权重的敏感性分析**（再 6 次，只补两个基线；核心的 `_nocw` 已在消融里跑过。结果加 `_nocw` 后缀，不覆盖原结果）：
 
 ```bash
-python scripts/run_all.py --group main --reg A --no-cw
+python scripts/run_all.py --group main --reg A --no-cw --models fasttext,bilstm
 python scripts/plot_results.py --suffix _nocw
 ```
+
+汇总写入 `results/summary_nocw.csv`，与带权重版本的 `summary.csv` 并存。
 
 **第 3 步 · 阈值搜索**
 
