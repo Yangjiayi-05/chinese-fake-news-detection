@@ -91,7 +91,7 @@ REG_PROFILES = {
     'B': dict(DROPOUT=0.60, WEIGHT_DECAY=2e-4, WORD_DROPOUT=0.15),
     'C': dict(DROPOUT=0.40, WEIGHT_DECAY=5e-5, WORD_DROPOUT=0.05),
 }
-REG = os.environ.get('CFND_REG', 'A')
+REG = os.environ.get('CFND_REG', 'B')   # 阶段 0 按验证集选中 B，作为默认档位
 _reg = REG_PROFILES[REG]
 DROPOUT = _reg['DROPOUT']
 WEIGHT_DECAY = _reg['WEIGHT_DECAY']
@@ -104,7 +104,7 @@ LEARNING_RATE = 5e-4
 BATCH_SIZE = 64
 N_LAYERS = 1
 LABEL_SMOOTHING = 0.05
-EPOCHS = 40
+EPOCHS = 100          # 上限；各模型由早停决定实际轮数（FastText 收敛慢，40 轮不够）
 PATIENCE = 8
 MIN_DELTA = 0.001
 
