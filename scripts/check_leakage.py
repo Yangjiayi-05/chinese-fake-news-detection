@@ -17,6 +17,8 @@ import os
 import sys
 from collections import Counter
 
+import pandas as pd
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config  # noqa: E402
@@ -46,6 +48,15 @@ def split_texts():
         tr, dv, te = assign_clusters(clusters, labels)
         pick = lambda idx: [texts[i] for i in idx]  # noqa: E731
         return pick(tr), pick(te), (len(tr), len(dv), len(te))
+
+    if config.SPLIT_MODE == 'time':
+        ts = pd.to_datetime(df['publish_time'], errors='coerce')
+        order = df.assign(_ts=ts).sort_values('_ts', na_position='last').index
+        df = df.loc[order]
+        n = len(df)
+        i1, i2 = int(n * 0.7), int(n * 0.85)
+        return (df['text'].iloc[:i1].tolist(), df['text'].iloc[i2:].tolist(),
+                (i1, i2 - i1, n - i2))
 
     from sklearn.model_selection import train_test_split
     train_df, tmp_df = train_test_split(

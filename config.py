@@ -23,24 +23,22 @@ RAW_CSV = _first_existing([
 ])
 
 # ==================== 划分方式 ====================
-# 'random'：随机分层划分，快；但同源新闻会跨训练/测试，存在数据泄漏
-# 'group' ：按重复簇分组划分，近似重复的样本绑在同一侧，泄漏为 0
-# 切换方式：Windows  set CFND_SPLIT=random  /  Linux  export CFND_SPLIT=random
+# group  ：按重复簇分组，近似重复的样本绑在同一侧（主实验）
+# random ：随机分层，存在跨集合重复（对照，量化泄漏影响）
+# time   ：按发布时间切分（对照，检验时间漂移）
+# 切换：Windows  set CFND_SPLIT=random   /  Linux  export CFND_SPLIT=random
 SPLIT_MODE = os.environ.get('CFND_SPLIT', 'group')
 SPLIT_SEED = 42
-PROCESSED_SUBDIR = 'processed' if SPLIT_MODE == 'random' else 'processed_group'
+_SUBDIR = {'random': 'processed', 'group': 'processed_group', 'time': 'processed_time'}
+PROCESSED_SUBDIR = _SUBDIR.get(SPLIT_MODE, 'processed_group')
 
-# 分组划分的两个超参
-GROUP_CONT_RATIO = 0.8     # 两条样本的内容包含度超过它，判为同一簇
+# 分组划分参数
+GROUP_CONT_RATIO = 0.8     # 内容包含度超过它，判为同一簇
 GROUP_TEMPLATE_DF = 0.02   # 出现在 2% 以上文档里的 n-gram 视为模板，聚类前剔除
 
 
 def _resolve_kaggle_processed(input_root='/kaggle/input'):
-    """在 Kaggle 的只读挂载区里找到预处理数据。
-
-    先按约定的数据集名尝试，找不到再扫一层通配兜底；
-    这样即使数据集改了名字，只要里面有 vocab.pkl 就能跑起来。
-    """
+    """在 Kaggle 的只读挂载区里找到预处理数据（按当前划分方式找对应子目录）。"""
     candidates = [
         os.path.join(input_root, 'mcfend-processed-data', PROCESSED_SUBDIR),
         os.path.join(input_root, 'datasets', 'yanghuanhuan05',
@@ -57,14 +55,13 @@ def _resolve_kaggle_processed(input_root='/kaggle/input'):
 
 
 if IS_KAGGLE:
-    # Kaggle 上数据以 Dataset 形式只读挂载，产出统一写到 working 目录
     PROCESSED_DIR = _resolve_kaggle_processed()
     WORK_DIR = '/kaggle/working'
 else:
     PROCESSED_DIR = os.path.join(BASE_DIR, 'data', PROCESSED_SUBDIR)
     WORK_DIR = BASE_DIR
 
-# 输出目录按划分方式加后缀：跑对照组（random）时不会覆盖主实验（group）的权重与结果
+# 输出目录按划分方式加后缀：跑对照组时不会覆盖主实验的权重与结果
 _RUN_SUFFIX = '' if SPLIT_MODE == 'group' else '_' + SPLIT_MODE
 CHECKPOINT_DIR = os.path.join(WORK_DIR, 'checkpoints' + _RUN_SUFFIX)
 LOGS_DIR = os.path.join(WORK_DIR, 'logs' + _RUN_SUFFIX)
@@ -76,50 +73,47 @@ def ensure_dir(path):
     """写文件之前再创建目录，避免 import config 时就在项目里堆出几个空文件夹。"""
     os.makedirs(path, exist_ok=True)
 
-# 序列长度：预处理、训练、推理三处统一从这里取，避免训练 256 推理 200 的错位
+# 序列长度：预处理、训练、推理三处统一从这里取
 MAX_LEN = 256
 NUM_CLASSES = 2
 LABEL_MAP = {'谣言': 0, '事实': 1}
 
-# 实验协议：4 个主模型 × 5 个种子 = 20 次，外加 Mask 消融组 × 5 = 25 次
-# 前三个种子与开题口径一致，后两个用于降低方差（全部上报，不挑选）
-SEEDS = [42, 123, 2024, 7, 2025]
-MODEL_LIST = ['fasttext', 'bilstm', 'bilstm_avgpool', 'bilstm_attention',
-              'bilstm_attention_nomask']
-MAIN_MODEL_LIST = ['fasttext', 'bilstm', 'bilstm_avgpool', 'bilstm_attention']
+# ==================== 实验协议 ====================
+SEEDS = [42, 123, 2024]
+MAIN_MODEL_LIST = ['fasttext', 'bilstm', 'bilstm_attention']
+MODEL_LIST = ['fasttext', 'bilstm', 'bilstm_attention', 'bilstm_attention_nomask']
 DEFAULT_MODEL = 'bilstm_attention'
 DEPLOY_SEED = 42
 
-# 超参档位：paper 是论文正式口径，tuned 是 Kaggle 上试过的强正则那套
-PROFILE = os.environ.get('CFND_PROFILE', 'paper')
-PROFILES = {
-    'paper': dict(EMBEDDING_DIM=200, HIDDEN_DIM=128, DROPOUT=0.5,
-                  LEARNING_RATE=5e-4, WEIGHT_DECAY=1e-4),
-    'tuned': dict(EMBEDDING_DIM=300, HIDDEN_DIM=256, DROPOUT=0.6,
-                  LEARNING_RATE=3e-4, WEIGHT_DECAY=1e-4),
+# 正则档位：阶段 0 只跑核心模型，依据验证集 Macro-F1 选优，之后固定
+REG_PROFILES = {
+    'A': dict(DROPOUT=0.50, WEIGHT_DECAY=1e-4, WORD_DROPOUT=0.10),
+    'B': dict(DROPOUT=0.60, WEIGHT_DECAY=2e-4, WORD_DROPOUT=0.15),
+    'C': dict(DROPOUT=0.40, WEIGHT_DECAY=5e-5, WORD_DROPOUT=0.05),
 }
-_cfg = PROFILES[PROFILE]
-EMBEDDING_DIM = _cfg['EMBEDDING_DIM']
-HIDDEN_DIM = _cfg['HIDDEN_DIM']
-DROPOUT = _cfg['DROPOUT']
-LEARNING_RATE = _cfg['LEARNING_RATE']
-WEIGHT_DECAY = _cfg['WEIGHT_DECAY']
+REG = os.environ.get('CFND_REG', 'A')
+_reg = REG_PROFILES[REG]
+DROPOUT = _reg['DROPOUT']
+WEIGHT_DECAY = _reg['WEIGHT_DECAY']
+WORD_DROPOUT = _reg['WORD_DROPOUT']
 
+# 模型与训练超参（固定，不参与阶段 0）
+EMBEDDING_DIM = 200
+HIDDEN_DIM = 128
+LEARNING_RATE = 5e-4
 BATCH_SIZE = 64
 N_LAYERS = 1
 LABEL_SMOOTHING = 0.05
 EPOCHS = 40
 PATIENCE = 8
 MIN_DELTA = 0.001
-# 训练时按概率把真实词替换成 <UNK>，打断"背原句"，参数最多的注意力模型受益最大
-WORD_DROPOUT = 0.1
 
-# 嵌入层是否用 Word2Vec 预训练初始化（语料就是训练集本身，首次运行约 20 秒，之后读缓存）
-USE_PRETRAINED_EMB = True
+# 开关（默认开启，训练脚本可按变体临时关闭）
+USE_PRETRAINED_EMB = True     # Word2Vec 初始化嵌入层
+USE_CLASS_WEIGHT = True       # 类别加权交叉熵
 W2V_WINDOW = 5
 W2V_EPOCHS = 5
 
-# 决策阈值：判定"事实/谣言"的分界，由 search_threshold.py 在验证集上搜出来后写回这里
+# 决策阈值：验证集搜索后写回这里
 DECISION_THRESHOLD = 0.5
-# 模糊带半宽：系统层面的人工复核成本参数，与上面的分界线不是一回事
 BAND_HALF_WIDTH = 0.07

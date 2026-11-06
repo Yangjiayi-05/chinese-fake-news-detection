@@ -99,25 +99,40 @@ def build_pretrained_embedding(vocab, train_x):
     return emb
 
 
-def run(model_name, seed):
-    """完整跑一次实验，返回指标字典（同时写入 results 目录）。"""
+def apply_reg(profile):
+    """切换正则档位（A/B/C），只改 dropout / weight decay / word dropout 三项。"""
+    cfg = config.REG_PROFILES[profile]
+    config.DROPOUT = cfg['DROPOUT']
+    config.WEIGHT_DECAY = cfg['WEIGHT_DECAY']
+    config.WORD_DROPOUT = cfg['WORD_DROPOUT']
+
+
+def run(model_name, seed, reg='A', use_cw=True, use_w2v=True, suffix=''):
+    """完整跑一次实验，返回指标字典（同时写入 results 目录）。
+
+    reg      : 正则档位 A/B/C
+    use_cw   : 是否使用类别加权交叉熵
+    use_w2v  : 是否用 Word2Vec 初始化嵌入层
+    suffix   : 结果文件后缀（消融变体用，如 _nocw / _now2v）
+    """
     set_seed(seed)
-    tag = f'{model_name}_seed{seed}'
+    apply_reg(reg)
+    tag = f'{model_name}_seed{seed}{suffix}'
     for _d in (config.CHECKPOINT_DIR, config.LOGS_DIR, config.RESULTS_DIR):
         config.ensure_dir(_d)
     log_path = os.path.join(config.LOGS_DIR, f'log_{tag}.txt')
 
-    print(f'\n===== {tag} | profile={config.PROFILE} | device={DEVICE} =====')
+    print(f'\n===== {tag} | 正则={reg} | 类权重={use_cw} | 词向量={use_w2v} | device={DEVICE} =====')
     with open(log_path, 'w', encoding='utf-8') as log_file:
         def log(msg):
             print(msg)
             log_file.write(msg + '\n')
             log_file.flush()
 
-        log(f'模型 {model_name} | 种子 {seed} | 档位 {config.PROFILE} | 长度 {config.MAX_LEN}')
+        log(f'模型 {model_name} | 种子 {seed} | 长度 {config.MAX_LEN} | 正则档位 {reg}')
         log(f'超参 EMB={config.EMBEDDING_DIM} HIDDEN={config.HIDDEN_DIM} '
             f'DROPOUT={config.DROPOUT} LR={config.LEARNING_RATE} WD={config.WEIGHT_DECAY} '
-            f'WORD_DROPOUT={config.WORD_DROPOUT}')
+            f'WORD_DROPOUT={config.WORD_DROPOUT} | 类权重={use_cw} | 词向量={use_w2v}')
 
         if not os.path.exists(os.path.join(config.PROCESSED_DIR, 'train.pkl')):
             raise FileNotFoundError(
@@ -143,17 +158,20 @@ def run(model_name, seed):
         model = build_model(model_name, len(vocab['word2idx'])).to(DEVICE)
 
         # 嵌入层初始化：随机 or Word2Vec 预训练（可训练，不冻结）
-        if config.USE_PRETRAINED_EMB and hasattr(model, 'embedding'):
+        if use_w2v and config.USE_PRETRAINED_EMB and hasattr(model, 'embedding'):
             with open(os.path.join(config.PROCESSED_DIR, 'train.pkl'), 'rb') as f:
                 train_x = pickle.load(f)['X']
             emb = build_pretrained_embedding(vocab, train_x)
             model.embedding.weight.data.copy_(torch.from_numpy(emb))
             log(f'嵌入层用 Word2Vec 初始化（dim={config.EMBEDDING_DIM}，可训练）')
 
-        # 类别权重按训练集真实分布计算，不写死常数
+        # 类别权重：开启时按训练集分布计算，关闭时两类等权（消融用）
         n0, n1 = int(y_train.count(0)), int(y_train.count(1))
         total = n0 + n1
-        w0, w1 = total / (2.0 * n0), total / (2.0 * n1)
+        if use_cw:
+            w0, w1 = total / (2.0 * n0), total / (2.0 * n1)
+        else:
+            w0, w1 = 1.0, 1.0
         log(f'类别分布 谣言={n0} 事实={n1} | 权重 {w0:.4f}, {w1:.4f}')
 
         criterion = nn.CrossEntropyLoss(
@@ -223,7 +241,8 @@ def run(model_name, seed):
                     np.array(arr))
 
         result = {
-            'model': model_name, 'seed': seed, 'profile': config.PROFILE,
+            'tag': tag, 'model': model_name, 'seed': seed, 'reg': reg,
+            'use_cw': use_cw, 'use_w2v': use_w2v,
             'max_len': config.MAX_LEN, 'best_epoch': best_epoch,
             'dev_macro_f1': round(float(d_macro), 4),
             'test_acc': round(float(t_acc), 4),
@@ -244,8 +263,15 @@ def main():
     parser.add_argument('--model', default=config.DEFAULT_MODEL,
                         choices=config.MODEL_LIST)
     parser.add_argument('--seed', type=int, default=config.SEEDS[0])
+    parser.add_argument('--reg', default=config.REG, choices=list(config.REG_PROFILES))
+    parser.add_argument('--no-class-weight', action='store_true',
+                        help='关闭类别加权（消融用）')
+    parser.add_argument('--no-w2v', action='store_true',
+                        help='关闭 Word2Vec 初始化（消融用）')
+    parser.add_argument('--suffix', default='', help='结果文件后缀')
     args = parser.parse_args()
-    run(args.model, args.seed)
+    run(args.model, args.seed, reg=args.reg, use_cw=not args.no_class_weight,
+        use_w2v=not args.no_w2v, suffix=args.suffix)
 
 
 if __name__ == '__main__':

@@ -129,6 +129,16 @@ def main():
         print(f'      {n_clusters} 个重复簇，最大簇 {max(len(c) for c in clusters)} 条')
         tr, dv, te = assign_clusters(clusters, labels)
         train_df, dev_df, test_df = df.iloc[tr], df.iloc[dv], df.iloc[te]
+    elif config.SPLIT_MODE == 'time':
+        print('[3/5] 划分：按发布时间切分 7 : 1.5 : 1.5')
+        ts = pd.to_datetime(df['publish_time'], errors='coerce')
+        n_bad = int(ts.isna().sum())
+        print(f'      无法解析的时间 {n_bad} 条（排到最后）')
+        df = df.assign(_ts=ts).sort_values('_ts', na_position='last').drop(columns='_ts')
+        n_all = len(df)
+        i1, i2 = int(n_all * 0.7), int(n_all * 0.85)
+        train_df, dev_df, test_df = df.iloc[:i1], df.iloc[i1:i2], df.iloc[i2:]
+        print(f'      时间范围：{ts.min()} ～ {ts.max()}')
     else:
         print('[3/5] 划分：随机分层 7 : 1.5 : 1.5')
         from sklearn.model_selection import train_test_split
@@ -172,8 +182,7 @@ def main():
     meta = {
         'source_csv': csv_path,
         'split_mode': config.SPLIT_MODE,
-        'total': len(df),
-        'train': len(train_df),
+        'total': len(df),        'train': len(train_df),
         'dev': len(dev_df),
         'test': len(test_df),
         'pos_rate': {
