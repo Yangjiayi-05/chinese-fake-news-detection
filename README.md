@@ -68,7 +68,7 @@ cd D:\chinese-fake-news-detection
 conda activate nlp
 chcp 65001                      # 控制台切 UTF-8，避免中文日志乱码
 python utils\preprocess.py
-python scripts\run_all.py
+python scripts\run_all.py --group all
 python scripts\search_threshold.py --all
 ```
 
@@ -78,9 +78,10 @@ python scripts\search_threshold.py --all
 cd ~/chinese-fake-news-detection
 python3 -m pip install -r requirements.txt
 python3 utils/preprocess.py
-python3 scripts/run_all.py
+python3 scripts/run_all.py --group all
 python3 scripts/search_threshold.py --all
-# 切换超参档位：export CFND_PROFILE=tuned
+# 切换正则档位：export CFND_REG=B
+# 切换划分方式：export CFND_SPLIT=random
 ```
 
 **Kaggle Notebook**
@@ -88,7 +89,7 @@ python3 scripts/search_threshold.py --all
 ```python
 !git clone https://github.com/Yangjiayi-05/chinese-fake-news-detection.git
 %cd chinese-fake-news-detection
-!python scripts/run_all.py
+!python scripts/run_all.py --group all
 ```
 
 ### 2.4 平台差异与已知的坑
@@ -118,7 +119,9 @@ python3 scripts/search_threshold.py --all
 │   ├── run_all.py          # 按阶段批量跑（main / ablation / reg / all）
 │   ├── search_threshold.py # 验证集搜索阈值 + 模糊带反推 + bootstrap 置信区间
 │   ├── compare_models.py   # 模型间差异的配对 bootstrap 显著性检验
-│   ├── plot_results.py     # 出图：模型对比、训练曲线
+│   ├── plot_results.py     # 出图：三版箱线图、训练曲线、混淆矩阵
+│   ├── analyze_time.py     # 时间漂移证据、三种划分对比（需原始 CSV）
+│   ├── check_leakage.py    # 训练/测试重叠自检（需原始 CSV）
 │   └── check_leakage.py    # 训练/测试集内容重叠自检
 ├── data/
 │   ├── raw/                # 原始数据，不入库
@@ -178,12 +181,29 @@ MAX_LEN=256 截断率：0.76%
 **第 2 步 · 按阶段跑实验（33 次）**
 
 ```bash
-python scripts/run_all.py --group reg        # 阶段 0：正则档位，按验证集选优
-python scripts/run_all.py --group main --reg A    # 阶段 1：主实验（A 换成选中的档位）
-python scripts/run_all.py --group ablation --reg A  # 阶段 2：消融
+# 阶段 0：正则档位 A/B/C，只跑核心模型，按验证集选优（9 次）
+python scripts/run_all.py --group reg
+
+# 阶段 1：主实验，3 模型 × 3 种子（9 次）；A 换成阶段 0 选中的档位
+python scripts/run_all.py --group main --reg A
+
+# 阶段 2：消融，无 mask / 无类权重 / 无词向量（9 次）
+python scripts/run_all.py --group ablation --reg A
+
+# 阶段 3：划分对照，只跑核心模型（各 3 次）
+set CFND_SPLIT=random && python scripts/run_all.py --group main --reg A --models bilstm_attention
+set CFND_SPLIT=time   && python scripts/run_all.py --group main --reg A --models bilstm_attention
 ```
 
 得到 `results/results.csv`（逐次明细）与 `results/summary.csv`（按配置的 mean ± std）。
+对照组写入 `results_random/`、`results_time/`，不会覆盖主实验。
+
+**可选 · 无类权重的敏感性分析**（再 9 次，结果加 `_nocw` 后缀，不覆盖原结果）：
+
+```bash
+python scripts/run_all.py --group main --reg A --no-cw
+python scripts/plot_results.py --suffix _nocw
+```
 
 **第 3 步 · 阈值搜索**
 
@@ -205,7 +225,7 @@ Kaggle 只作为算力，数据处理在本地完成：
 2. 将 `data/processed_group/`（以及对照用的 `processed/`、`processed_time/`）打包上传为
    Kaggle Dataset，命名 `mcfend-processed-data`；
 3. Notebook 里 Add Data 挂载该数据集，并克隆本仓库；
-4. 直接 `python scripts/run_all.py`。
+4. 按阶段跑：`python scripts/run_all.py --group reg` → `main` → `ablation`。
 
 `config.py` 会按「约定名 → 自动扫描」两级策略找挂载路径：
 
