@@ -28,12 +28,18 @@ def create_data_loader(data_path, batch_size, shuffle, generator=None):
                       generator=generator)
 
 
-def train_epoch(model, data_loader, optimizer, criterion, device, clip=5.0):
+def train_epoch(model, data_loader, optimizer, criterion, device, clip=5.0,
+                word_dropout=0.0):
     model.train()
     total_loss = 0
     all_preds, all_labels = [], []
     for texts, labels in data_loader:
         texts, labels = texts.to(device), labels.to(device)
+        # Word Dropout：按概率把真实词替换成 <UNK>(1)，不动补零位(0)
+        if word_dropout > 0:
+            drop = torch.rand(texts.shape, device=device) < word_dropout
+            texts = torch.where(drop & (texts != 0),
+                                torch.ones_like(texts), texts)
         optimizer.zero_grad()
         outputs = model(texts)
         loss = criterion(outputs, labels)

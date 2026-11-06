@@ -62,6 +62,43 @@ def build_model(model_name, vocab_size):
     raise ValueError(f'未知模型：{model_name}')
 
 
+def build_pretrained_embedding(vocab, train_x):
+    """用训练集语料跑一个 Word2Vec，把词向量填进嵌入矩阵作为初始化。
+
+    语料就是训练集自己（无监督，不碰测试集），所以不引入外部数据。
+    首次运行约 20 秒，之后读 checkpoint 目录下的缓存。
+    """
+    vocab_size = len(vocab['word2idx'])
+    dim = config.EMBEDDING_DIM
+    cache = os.path.join(config.CHECKPOINT_DIR, f'w2v_init_{dim}_{vocab_size}.npy')
+    if os.path.exists(cache):
+        return np.load(cache)
+
+    from gensim.models import Word2Vec
+    idx2word = vocab['idx2word']
+    # 用字符串词建句，并剔除补零：否则 75% 的 token 都是 <PAD>，会把词向量带偏
+    sentences = []
+    for seq in train_x:
+        words = [idx2word[t] for t in seq if t != 0]
+        if words:
+            sentences.append(words)
+
+    w2v = Word2Vec(sentences, vector_size=dim, window=config.W2V_WINDOW,
+                   min_count=1, workers=4, epochs=config.W2V_EPOCHS,
+                   seed=config.SPLIT_SEED)
+
+    emb = np.random.normal(0, 0.1, (vocab_size, dim)).astype(np.float32)
+    emb[vocab['word2idx']['<PAD>']] = 0.0
+    hit = 0
+    for idx, word in enumerate(idx2word):
+        if word in w2v.wv:
+            emb[idx] = w2v.wv[word]
+            hit += 1
+    print(f'      Word2Vec 初始化：{hit}/{vocab_size} 个词命中')
+    np.save(cache, emb)
+    return emb
+
+
 def run(model_name, seed):
     """完整跑一次实验，返回指标字典（同时写入 results 目录）。"""
     set_seed(seed)
@@ -79,7 +116,8 @@ def run(model_name, seed):
 
         log(f'模型 {model_name} | 种子 {seed} | 档位 {config.PROFILE} | 长度 {config.MAX_LEN}')
         log(f'超参 EMB={config.EMBEDDING_DIM} HIDDEN={config.HIDDEN_DIM} '
-            f'DROPOUT={config.DROPOUT} LR={config.LEARNING_RATE} WD={config.WEIGHT_DECAY}')
+            f'DROPOUT={config.DROPOUT} LR={config.LEARNING_RATE} WD={config.WEIGHT_DECAY} '
+            f'WORD_DROPOUT={config.WORD_DROPOUT}')
 
         if not os.path.exists(os.path.join(config.PROCESSED_DIR, 'train.pkl')):
             raise FileNotFoundError(
@@ -104,6 +142,14 @@ def run(model_name, seed):
 
         model = build_model(model_name, len(vocab['word2idx'])).to(DEVICE)
 
+        # 嵌入层初始化：随机 or Word2Vec 预训练（可训练，不冻结）
+        if config.USE_PRETRAINED_EMB and hasattr(model, 'embedding'):
+            with open(os.path.join(config.PROCESSED_DIR, 'train.pkl'), 'rb') as f:
+                train_x = pickle.load(f)['X']
+            emb = build_pretrained_embedding(vocab, train_x)
+            model.embedding.weight.data.copy_(torch.from_numpy(emb))
+            log(f'嵌入层用 Word2Vec 初始化（dim={config.EMBEDDING_DIM}，可训练）')
+
         # 类别权重按训练集真实分布计算，不写死常数
         n0, n1 = int(y_train.count(0)), int(y_train.count(1))
         total = n0 + n1
@@ -127,8 +173,9 @@ def run(model_name, seed):
                                'dev_acc', 'dev_f1', 'dev_macro_f1'])
 
         for epoch in range(1, config.EPOCHS + 1):
-            train_loss, train_acc = train_epoch(model, train_loader, optimizer,
-                                                criterion, DEVICE)
+            train_loss, train_acc = train_epoch(
+                model, train_loader, optimizer, criterion, DEVICE,
+                word_dropout=config.WORD_DROPOUT)
             dev_loss, dev_acc, dev_p, dev_r, dev_f1, dev_macro, _, _ = evaluate(
                 model, dev_loader, criterion, DEVICE)
 

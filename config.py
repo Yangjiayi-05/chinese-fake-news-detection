@@ -81,8 +81,9 @@ MAX_LEN = 256
 NUM_CLASSES = 2
 LABEL_MAP = {'谣言': 0, '事实': 1}
 
-# 实验协议：4 个主模型 × 3 个种子 = 12 次，外加 1 个 Padding Mask 消融组 × 3 = 15 次
-SEEDS = [42, 123, 2024]
+# 实验协议：4 个主模型 × 5 个种子 = 20 次，外加 Mask 消融组 × 5 = 25 次
+# 前三个种子与开题口径一致，后两个用于降低方差（全部上报，不挑选）
+SEEDS = [42, 123, 2024, 7, 2025]
 MODEL_LIST = ['fasttext', 'bilstm', 'bilstm_avgpool', 'bilstm_attention',
               'bilstm_attention_nomask']
 MAIN_MODEL_LIST = ['fasttext', 'bilstm', 'bilstm_avgpool', 'bilstm_attention']
@@ -92,8 +93,8 @@ DEPLOY_SEED = 42
 # 超参档位：paper 是论文正式口径，tuned 是 Kaggle 上试过的强正则那套
 PROFILE = os.environ.get('CFND_PROFILE', 'paper')
 PROFILES = {
-    'paper': dict(EMBEDDING_DIM=200, HIDDEN_DIM=128, DROPOUT=0.4,
-                  LEARNING_RATE=5e-4, WEIGHT_DECAY=5e-5),
+    'paper': dict(EMBEDDING_DIM=200, HIDDEN_DIM=128, DROPOUT=0.5,
+                  LEARNING_RATE=5e-4, WEIGHT_DECAY=1e-4),
     'tuned': dict(EMBEDDING_DIM=300, HIDDEN_DIM=256, DROPOUT=0.6,
                   LEARNING_RATE=3e-4, WEIGHT_DECAY=1e-4),
 }
@@ -107,9 +108,16 @@ WEIGHT_DECAY = _cfg['WEIGHT_DECAY']
 BATCH_SIZE = 64
 N_LAYERS = 1
 LABEL_SMOOTHING = 0.05
-EPOCHS = 30
-PATIENCE = 5
+EPOCHS = 40
+PATIENCE = 8
 MIN_DELTA = 0.001
+# 训练时按概率把真实词替换成 <UNK>，打断"背原句"，参数最多的注意力模型受益最大
+WORD_DROPOUT = 0.1
+
+# 嵌入层是否用 Word2Vec 预训练初始化（语料就是训练集本身，首次运行约 20 秒，之后读缓存）
+USE_PRETRAINED_EMB = True
+W2V_WINDOW = 5
+W2V_EPOCHS = 5
 
 # 决策阈值：判定"事实/谣言"的分界，由 search_threshold.py 在验证集上搜出来后写回这里
 DECISION_THRESHOLD = 0.5

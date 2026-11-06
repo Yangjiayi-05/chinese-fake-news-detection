@@ -5,7 +5,7 @@ BiLSTM 编码上下文，自注意力汇聚句向量（带 Padding Mask 屏蔽�
 注意力权重直接用于解释"模型为什么这样判"，并落地为三档预警的人机协同筛查系统。
 
 - **数据**：MCFEND 中文平台合并版，清洗后 17,524 条，7 : 1.5 : 1.5 分层划分
-- **模型**：FastText / BiLSTM / BiLSTM+AvgPool / **BiLSTM+Attention**，4 模型 × 3 种子共 12 次实验
+- **模型**：FastText / BiLSTM / BiLSTM+AvgPool / **BiLSTM+Attention**，4 模型 × 5 种子共 20 次主实验，另加 Mask 消融 5 次
 - **主指标**：Macro-F1（应对 2.08 : 1 的类别不平衡），另报正类 P/R/F1 与 Accuracy
 - **应用**：Streamlit 三档预警（高置信谣言拦截 / 高置信事实放行 / 模糊区间人工复核）
 
@@ -115,7 +115,7 @@ python3 scripts/search_threshold.py --all
 ├── models/                 # fasttext / bilstm / bilstm_avgpool / bilstm_attention / attention_nomask
 ├── utils/                  # preprocess 数据管线、split 重复簇分组、helper 训练与评估
 ├── scripts/
-│   ├── run_all.py          # 5 个模型 × 3 种子一键跑完，汇总 mean±std
+│   ├── run_all.py          # 5 个模型 × 5 种子一键跑完，汇总 mean±std
 │   ├── search_threshold.py # 验证集搜索阈值 + 模糊带反推 + bootstrap 置信区间
 │   ├── compare_models.py   # 模型间差异的配对 bootstrap 显著性检验
 │   ├── plot_results.py     # 出图：模型对比、训练曲线
@@ -174,7 +174,7 @@ MAX_LEN=256 截断率：0.76%
 产物：`data/processed/{train,dev,test,vocab}.pkl` 与 `meta.json`。`meta.json` 把份数、
 词表规模、截断率、类别权重全部存档，写论文时直接引用，不必回头猜参数。
 
-**第 2 步 · 12 次实验**
+**第 2 步 · 20 次主实验（另含 5 次 Mask 消融）**
 
 ```bash
 python scripts/run_all.py
