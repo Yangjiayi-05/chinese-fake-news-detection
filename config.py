@@ -79,9 +79,11 @@ MAX_LEN = 256
 NUM_CLASSES = 2
 LABEL_MAP = {'谣言': 0, '事实': 1}
 
-# 实验协议：4 个模型 × 3 个种子 = 12 次
+# 实验协议：4 个主模型 × 3 个种子 = 12 次，外加 1 个 Padding Mask 消融组 × 3 = 15 次
 SEEDS = [42, 123, 2024]
-MODEL_LIST = ['fasttext', 'bilstm', 'bilstm_avgpool', 'bilstm_attention']
+MODEL_LIST = ['fasttext', 'bilstm', 'bilstm_avgpool', 'bilstm_attention',
+              'bilstm_attention_nomask']
+MAIN_MODEL_LIST = ['fasttext', 'bilstm', 'bilstm_avgpool', 'bilstm_attention']
 DEFAULT_MODEL = 'bilstm_attention'
 DEPLOY_SEED = 42
 

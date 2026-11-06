@@ -112,14 +112,18 @@ python3 scripts/search_threshold.py --all
 ├── config.py               # 全局配置：路径、长度、超参、阈值、种子（唯一真源）
 ├── main.py                 # 单次训练，按验证集 Macro-F1 早停与选模型
 ├── inference.py            # 推理：事实概率 + 注意力关键词
-├── models/                 # 4 个模型：fasttext / bilstm / bilstm_avgpool / bilstm_attention
-├── utils/                  # preprocess.py 数据管线，helper.py 训练与评估
+├── models/                 # fasttext / bilstm / bilstm_avgpool / bilstm_attention / attention_nomask
+├── utils/                  # preprocess 数据管线、split 重复簇分组、helper 训练与评估
 ├── scripts/
-│   ├── run_all.py          # 4 模型 × 3 种子一键跑完，汇总 mean±std
-│   └── search_threshold.py # 验证集搜索决策阈值 + 测试集 bootstrap 置信区间
+│   ├── run_all.py          # 5 个模型 × 3 种子一键跑完，汇总 mean±std
+│   ├── search_threshold.py # 验证集搜索阈值 + 模糊带反推 + bootstrap 置信区间
+│   ├── compare_models.py   # 模型间差异的配对 bootstrap 显著性检验
+│   ├── plot_results.py     # 出图：模型对比、训练曲线
+│   └── check_leakage.py    # 训练/测试集内容重叠自检
 ├── data/
 │   ├── raw/                # 原始数据，不入库
-│   └── processed/          # 预处理产物，只入库 vocab.pkl
+│   ├── processed/          # 随机划分产物（只入库 vocab.pkl）
+│   └── processed_group/    # 分组划分产物（只入库 vocab.pkl）
 ├── requirements.txt
 └── CITATION.cff
 ```
@@ -244,6 +248,19 @@ Kaggle 只作为算力，数据处理在本地完成：
 | 超参档位 | `paper`（emb200/hidden128/dropout0.4/lr5e-4）、`tuned`（emb300/hidden256/dropout0.6/lr3e-4） |
 
 模型对比统一使用 0.5 默认阈值；系统应用使用搜索得到的最优阈值。
+
+**划分方式**由环境变量 `CFND_SPLIT` 决定：
+
+| 取值 | 含义 | 产物目录 | 用途 |
+|---|---|---|---|
+| `group`（默认） | 按重复簇分组，同源转载绑在同一侧 | `data/processed_group/` | 主实验，无泄漏 |
+| `random` | 随机分层 7:1.5:1.5 | `data/processed/` | 对照，量化泄漏带来的虚高 |
+
+```bash
+python utils/preprocess.py                    # 默认分组划分
+set CFND_SPLIT=random && python utils/preprocess.py   # Windows 生成随机划分
+export CFND_SPLIT=random && python utils/preprocess.py  # Linux/macOS
+```
 
 跑完 `run_all.py` 后，把 `results/summary.csv` 的四行填进下表（**不要手写数字，直接复制**）：
 

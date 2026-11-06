@@ -22,6 +22,7 @@ from sklearn.metrics import classification_report
 import config
 from models.bilstm import BiLSTM_NoAttention
 from models.bilstm_attention import BiLSTM_Attention
+from models.bilstm_attention_nomask import BiLSTM_Attention_NoMask
 from models.bilstm_avgpool import BiLSTM_AvgPool
 from models.fasttext import FastText
 from utils.helper import create_data_loader, evaluate, train_epoch
@@ -55,6 +56,9 @@ def build_model(model_name, vocab_size):
     if model_name == 'bilstm_attention':
         return BiLSTM_Attention(vocab_size, config.EMBEDDING_DIM,
                                 config.HIDDEN_DIM, **kwargs)
+    if model_name == 'bilstm_attention_nomask':
+        return BiLSTM_Attention_NoMask(vocab_size, config.EMBEDDING_DIM,
+                                       config.HIDDEN_DIM, **kwargs)
     raise ValueError(f'未知模型：{model_name}')
 
 

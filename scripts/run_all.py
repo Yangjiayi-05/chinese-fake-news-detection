@@ -13,6 +13,8 @@ import csv
 import os
 import sys
 
+import argparse
+
 import numpy as np
 
 # 允许从 scripts/ 子目录执行：把项目根加入模块搜索路径
@@ -25,7 +27,7 @@ from main import run  # noqa: E402
 def summarize(rows):
     """按模型聚合三个指标，std 用样本标准差（ddof=1）。"""
     stats = {}
-    for model in config.MODEL_LIST:
+    for model in dict.fromkeys(r['model'] for r in rows):
         sub = [r for r in rows if r['model'] == model]
         if not sub:
             continue
@@ -38,9 +40,21 @@ def summarize(rows):
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--models', default=','.join(config.MODEL_LIST),
+                        help='逗号分隔的模型列表，默认跑全部')
+    parser.add_argument('--seeds', default=','.join(str(s) for s in config.SEEDS),
+                        help='逗号分隔的种子列表，默认跑全部')
+    args = parser.parse_args()
+
+    models = [m.strip() for m in args.models.split(',') if m.strip()]
+    seeds = [int(s) for s in args.seeds.split(',') if s.strip()]
+    print(f'模型：{models}')
+    print(f'种子：{seeds}')
+
     rows = []
-    for model in config.MODEL_LIST:
-        for seed in config.SEEDS:
+    for model in models:
+        for seed in seeds:
             print(f'\n>>>>>>>>>> {model} | seed={seed} <<<<<<<<<<')
             rows.append(run(model, seed))
 
