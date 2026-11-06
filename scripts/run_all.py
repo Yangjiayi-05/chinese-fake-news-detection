@@ -115,6 +115,9 @@ def main():
     if not runs:
         print('没有匹配的配置，检查 --models')
         return
+    if args.no_cw and args.group == 'ablation':
+        print('消融组本身已包含"无类权重"变体，不要叠加 --no-cw')
+        return
     if args.no_cw:
         runs = [(m, dict(kw, use_cw=False,
                          suffix=kw.get('suffix', '') + '_nocw'))
@@ -142,7 +145,12 @@ def main():
 
     stats = summarize(rows)
     is_reg = args.group == 'reg'
-    name = 'reg_summary.csv' if is_reg else 'summary.csv'
+    if is_reg:
+        name = 'reg_summary.csv'
+    elif args.no_cw:
+        name = 'summary_nocw.csv'   # 不覆盖带权重那版汇总
+    else:
+        name = 'summary.csv'
     out = os.path.join(config.RESULTS_DIR, name)
     write_summary(out, stats, by_dev=is_reg)
 
