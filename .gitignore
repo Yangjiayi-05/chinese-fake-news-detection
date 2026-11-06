@@ -1,10 +1,32 @@
+# Python
 __pycache__/
-*.pkl
-*.pth
-*.npy
-logs/
-checkpoints/
-figures/
-data/
+*.py[cod]
+.ipynb_checkpoints/
+
+# IDE / 系统
 .idea/
+.vscode/
 .DS_Store
+
+# 运行产物
+logs/
+results/
+figures/
+
+# 原始数据集：体积大且受使用条款约束，绝不进仓库
+MCFEND_original_dataset/
+
+# 原始数据与中间数据不提交；只放行部署需要的词表
+data/raw/
+data/processed/*
+!data/processed/vocab.pkl
+
+# 权重只在训练时产生；只放行部署用的那一个
+checkpoints/*
+!checkpoints/best_bilstm_attention_seed42.pth
+
+# 压缩包
+*.zip
+
+# 本机专属文件（含绝对路径，不随仓库同步）
+本机运行手册.md

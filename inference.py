@@ -1,51 +1,71 @@
-import torch
-import pickle
+# -*- coding: utf-8 -*-
+"""推理：加载部署权重，输出"事实概率"和注意力关键词。
+
+两处与旧版不同：
+1. 序列长度统一取 config.MAX_LEN，避免训练 256、推理 200 的位置错位；
+2. 只返回概率，不在这里做标签判定，标签由 app.py 用统一阈值决定。
+"""
 import os
+import pickle
+
 import jieba
-from config import PROCESSED_DIR, CHECKPOINT_DIR, EMBEDDING_DIM, HIDDEN_DIM, N_LAYERS, DROPOUT, MAX_LEN
+import torch
+
+import config
 from models.bilstm_attention import BiLSTM_Attention
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-def load_model_and_vocab():
-    with open(os.path.join(PROCESSED_DIR, 'vocab.pkl'), 'rb') as f:
-        vocab = pickle.load(f)
-    vocab_size = len(vocab['word2idx'])
 
-    model = BiLSTM_Attention(vocab_size, EMBEDDING_DIM, HIDDEN_DIM,
-                             output_dim=2, n_layers=N_LAYERS, dropout=DROPOUT)
-    model.load_state_dict(torch.load(os.path.join(CHECKPOINT_DIR, 'best_bilstm_attention_seed2024.pth'), map_location=DEVICE))
+def load_model_and_vocab(model_name=None, seed=None):
+    """加载词表与权重；文件缺失时直接报出期望路径，省得在云上翻日志。"""
+    model_name = model_name or config.DEFAULT_MODEL
+    seed = config.DEPLOY_SEED if seed is None else seed
+    if model_name != 'bilstm_attention':
+        raise ValueError('应用系统只部署 BiLSTM+Attention 模型')
+
+    vocab_path = os.path.join(config.PROCESSED_DIR, 'vocab.pkl')
+    ckpt_path = os.path.join(config.CHECKPOINT_DIR,
+                             f'best_{model_name}_seed{seed}.pth')
+    if not os.path.exists(vocab_path):
+        raise FileNotFoundError(f'缺少词表：{vocab_path}，请先运行 utils/preprocess.py')
+    if not os.path.exists(ckpt_path):
+        raise FileNotFoundError(f'缺少权重：{ckpt_path}，请先运行 main.py')
+
+    with open(vocab_path, 'rb') as f:
+        vocab = pickle.load(f)
+
+    model = BiLSTM_Attention(len(vocab['word2idx']), config.EMBEDDING_DIM,
+                             config.HIDDEN_DIM, output_dim=config.NUM_CLASSES,
+                             n_layers=config.N_LAYERS, dropout=config.DROPOUT)
+    model.load_state_dict(torch.load(ckpt_path, map_location=DEVICE))
     model.to(DEVICE)
     model.eval()
     return model, vocab
 
-def preprocess_text(text, word2idx, max_len=MAX_LEN):
-    tokens = jieba.lcut(text)
+
+def preprocess_text(text, word2idx, max_len=None):
+    """分词、截断、补零；tokens 同步截断，保证与注意力下标一一对应。"""
+    max_len = config.MAX_LEN if max_len is None else max_len
+    tokens = jieba.lcut(text)[:max_len]
     indices = [word2idx.get(w, word2idx['<UNK>']) for w in tokens]
-    if len(indices) < max_len:
-        indices += [word2idx['<PAD>']] * (max_len - len(indices))
-    else:
-        indices = indices[:max_len]
+    indices += [0] * (max_len - len(indices))
     return torch.tensor([indices], dtype=torch.long).to(DEVICE), tokens
 
-def predict(text, model, vocab):
-    word2idx = vocab['word2idx']
-    tensor, tokens = preprocess_text(text, word2idx)
 
+def predict(text, model, vocab, top_k=8):
+    """返回 (事实概率, 关键词及权重, 分词结果)。"""
+    tensor, tokens = preprocess_text(text, vocab['word2idx'])
     with torch.no_grad():
-        output = model(tensor)
-        prob = torch.softmax(output, dim=1)
-        pred = torch.argmax(prob, dim=1).item()
-        # 获取真实的概率(即类别1的概率)
-        p_real = prob[0][1].item() 
-        attn = model.get_attention(tensor).squeeze(0).cpu().numpy()
+        logits = model(tensor)
+        p_real = float(torch.softmax(logits, dim=1)[0, 1].item())
+        attn = model.get_attention(tensor)[0, :len(tokens)].cpu().numpy()
 
-    label = '真实' if pred == 1 else '虚假'
-    top_idx = attn.argsort()[-5:][::-1]
-    top_words = [(tokens[i], round(float(attn[i]), 4)) for i in top_idx if i < len(tokens)]
-
-    return label, p_real, top_words
-
-if __name__ == '__main__':
-    model, vocab = load_model_and_vocab()
-    print("Model and vocabulary loaded successfully. Please use app.py to input text.")
+    top_words = []
+    for i in attn.argsort()[::-1]:
+        if len(tokens[i].strip()) < 1:
+            continue
+        top_words.append((tokens[i], round(float(attn[i]), 4)))
+        if len(top_words) >= top_k:
+            break
+    return p_real, top_words, tokens

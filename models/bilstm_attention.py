@@ -2,9 +2,13 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
 class BiLSTM_Attention(nn.Module):
-    def __init__(self, vocab_size, embedding_dim, hidden_dim, output_dim, n_layers=1, dropout=0.5):
-        super(BiLSTM_Attention, self).__init__()
+    """双向 LSTM + 加性自注意力，并在 softmax 前屏蔽 <PAD> 位置。"""
+
+    def __init__(self, vocab_size, embedding_dim, hidden_dim, output_dim,
+                 n_layers=1, dropout=0.5):
+        super().__init__()
         self.embedding = nn.Embedding(vocab_size, embedding_dim, padding_idx=0)
         self.lstm = nn.LSTM(embedding_dim, hidden_dim, num_layers=n_layers,
                             bidirectional=True, batch_first=True,
@@ -12,29 +16,24 @@ class BiLSTM_Attention(nn.Module):
         self.attention = nn.Linear(hidden_dim * 2, 1)
         self.fc = nn.Linear(hidden_dim * 2, output_dim)
         self.dropout = nn.Dropout(dropout)
+        # 用 -1e4 而不是 -1e9：混合精度(fp16)下 -1e9 会溢出成 -inf，softmax 会得到 NaN
+        self.mask_value = -1e4
+
+    def _score(self, text, lstm_out):
+        """计算注意力打分，并把补零位置压到极低分。"""
+        scores = self.attention(lstm_out).squeeze(-1)
+        return scores.masked_fill(text == 0, self.mask_value)
 
     def forward(self, text):
         embedded = self.embedding(text)
-        lstm_out, _ = self.lstm(embedded) 
-        
-        attn_scores = self.attention(lstm_out).squeeze(-1)
-
-        # 1. 找出 <PAD> 的位置（是 0 的位置为 True）
-        mask = (text == 0)
-        # 2. 把 <PAD> 位置的得分变成负无穷大 (-1e9)，这样 Softmax 后它们就是 0！
-        attn_scores = attn_scores.masked_fill(mask, -1e9)
-        
-        attn_weights = F.softmax(attn_scores, dim=1).unsqueeze(-1)
-        context = torch.sum(lstm_out * attn_weights, dim=1)
-        
+        lstm_out, _ = self.lstm(embedded)
+        # 屏蔽后归一化，PAD 位置权重趋近 0，句向量只由真实词决定
+        weights = F.softmax(self._score(text, lstm_out), dim=1).unsqueeze(-1)
+        context = torch.sum(lstm_out * weights, dim=1)
         return self.fc(self.dropout(context))
 
-    # get_attention 方法顺便也加上 mask，方便你以后画热力图
     def get_attention(self, text):
+        """供可解释性可视化与系统高亮使用的注意力权重。"""
         embedded = self.embedding(text)
         lstm_out, _ = self.lstm(embedded)
-        attn_scores = self.attention(lstm_out).squeeze(-1)
-        mask = (text == 0)
-        attn_scores = attn_scores.masked_fill(mask, -1e9)
-        attn_weights = F.softmax(attn_scores, dim=1)
-        return attn_weights
+        return F.softmax(self._score(text, lstm_out), dim=1)

@@ -1,0 +1,32 @@
+cff-version: 1.2.0
+message: "如果本项目对你的研究有帮助，请引用以下条目。"
+title: "基于深度学习的中文社交媒体虚假新闻检测与应用"
+type: software
+authors:
+  - family-names: "Yang"
+    given-names: "Jiayi"
+repository-code: "https://github.com/Yangjiayi-05/chinese-fake-news-detection"
+keywords:
+  - 虚假新闻检测
+  - 中文社交媒体
+  - BiLSTM
+  - 自注意力
+  - 可解释性
+license: MIT
+references:
+  - type: conference-paper
+    title: "MCFEND: A Multi-source Benchmark Dataset for Chinese Fake News Detection"
+    authors:
+      - family-names: "Li"
+        given-names: "Yupeng"
+      - family-names: "He"
+        given-names: "Haorui"
+      - family-names: "Bai"
+        given-names: "Jin"
+      - family-names: "Wen"
+        given-names: "Dacheng"
+    conference:
+      name: "Proceedings of the ACM Web Conference 2024 (WWW '24)"
+    year: 2024
+    doi: "10.1145/3589334.3645385"
+    url: "https://doi.org/10.1145/3589334.3645385"

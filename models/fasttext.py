@@ -3,8 +3,10 @@ import torch.nn as nn
 
 
 class FastText(nn.Module):
+    """基线模型：词向量掩码平均 + 线性分类，用于衡量深层结构的增益。"""
+
     def __init__(self, vocab_size, embedding_dim, output_dim, dropout=0.5):
-        super(FastText, self).__init__()
+        super().__init__()
         self.embedding = nn.Embedding(vocab_size, embedding_dim, padding_idx=0)
         self.fc = nn.Linear(embedding_dim, output_dim)
         self.dropout = nn.Dropout(dropout)

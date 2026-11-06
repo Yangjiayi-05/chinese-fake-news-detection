@@ -1,41 +1,82 @@
+# -*- coding: utf-8 -*-
+"""全局配置：路径、序列长度、超参、阈值、随机种子，全项目只在这里定义一次。"""
 import os
 
-# ===== Environment Setup =====
-if os.path.exists('/kaggle/input'):
-    # Kaggle 绝对路径
-    PROCESSED_DIR = '/kaggle/input/datasets/yanghuanhuan05/mcfend-processed-data/processed'
-    CHECKPOINT_DIR = '/kaggle/working/checkpoints'
-    FIGURES_DIR = '/kaggle/working/figures'
-    LOGS_DIR = '/kaggle/working/logs'
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+IS_KAGGLE = os.path.exists('/kaggle/input')
+
+
+def _first_existing(paths):
+    """按顺序返回第一个存在的路径；都不存在时返回第一个，便于报错时看到期望位置。"""
+    for p in paths:
+        if os.path.exists(p):
+            return p
+    return paths[0]
+
+
+# 原始数据：本地解压目录优先，其次 Kaggle 挂载点（换 Kaggle 数据集名字时改这里即可）
+RAW_CSV = _first_existing([
+    os.path.join(BASE_DIR, 'MCFEND_original_dataset', 'mcfend', 'news.csv'),
+    '/kaggle/input/mcfend-original-dataset/mcfend/news.csv',
+    '/kaggle/input/mcfend/mcfend/news.csv',
+])
+
+if IS_KAGGLE:
+    # Kaggle 上数据以 Dataset 形式只读挂载，产出统一写到 working 目录
+    PROCESSED_DIR = _first_existing([
+        '/kaggle/input/mcfend-processed-data/processed',
+        '/kaggle/input/datasets/yanghuanhuan05/mcfend-processed-data/processed',
+    ])
+    WORK_DIR = '/kaggle/working'
 else:
-    # 本地 PyCharm 路径
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     PROCESSED_DIR = os.path.join(BASE_DIR, 'data', 'processed')
-    CHECKPOINT_DIR = os.path.join(BASE_DIR, 'checkpoints')
-    FIGURES_DIR = os.path.join(BASE_DIR, 'figures')
-    LOGS_DIR = os.path.join(BASE_DIR, 'logs')
+    WORK_DIR = BASE_DIR
 
-os.makedirs(CHECKPOINT_DIR, exist_ok=True)
-os.makedirs(LOGS_DIR, exist_ok=True)
-os.makedirs(FIGURES_DIR, exist_ok=True)
+CHECKPOINT_DIR = os.path.join(WORK_DIR, 'checkpoints')
+LOGS_DIR = os.path.join(WORK_DIR, 'logs')
+FIGURES_DIR = os.path.join(WORK_DIR, 'figures')
+RESULTS_DIR = os.path.join(WORK_DIR, 'results')
 
-# ===== Optimized Hyperparameters =====
-SEED = 2024
+for _d in (CHECKPOINT_DIR, LOGS_DIR, FIGURES_DIR, RESULTS_DIR):
+    try:
+        os.makedirs(_d, exist_ok=True)
+    except OSError:
+        pass
+
+# 序列长度：预处理、训练、推理三处统一从这里取，避免训练 256 推理 200 的错位
+MAX_LEN = 256
+NUM_CLASSES = 2
+LABEL_MAP = {'谣言': 0, '事实': 1}
+
+# 实验协议：4 个模型 × 3 个种子 = 12 次
+SEEDS = [42, 123, 2024]
+MODEL_LIST = ['fasttext', 'bilstm', 'bilstm_avgpool', 'bilstm_attention']
+DEFAULT_MODEL = 'bilstm_attention'
+DEPLOY_SEED = 42
+
+# 超参档位：paper 是论文正式口径，tuned 是 Kaggle 上试过的强正则那套
+PROFILE = os.environ.get('CFND_PROFILE', 'paper')
+PROFILES = {
+    'paper': dict(EMBEDDING_DIM=200, HIDDEN_DIM=128, DROPOUT=0.4,
+                  LEARNING_RATE=5e-4, WEIGHT_DECAY=5e-5),
+    'tuned': dict(EMBEDDING_DIM=300, HIDDEN_DIM=256, DROPOUT=0.6,
+                  LEARNING_RATE=3e-4, WEIGHT_DECAY=1e-4),
+}
+_cfg = PROFILES[PROFILE]
+EMBEDDING_DIM = _cfg['EMBEDDING_DIM']
+HIDDEN_DIM = _cfg['HIDDEN_DIM']
+DROPOUT = _cfg['DROPOUT']
+LEARNING_RATE = _cfg['LEARNING_RATE']
+WEIGHT_DECAY = _cfg['WEIGHT_DECAY']
+
 BATCH_SIZE = 64
-EMBEDDING_DIM = 300      # Increased from 200
-HIDDEN_DIM = 256         # Increased from 128
 N_LAYERS = 1
-
-# 大幅增加正则化：
-DROPOUT = 0.6           # 把丢弃率提高，强迫模型不依赖单一神经元
-LEARNING_RATE = 0.0003  # 学习率降低，让模型收敛更平滑
-WEIGHT_DECAY = 1e-4     # 增加 L2 正则化惩罚
-
 LABEL_SMOOTHING = 0.05
 EPOCHS = 30
 PATIENCE = 5
-MAX_LEN = 200
 MIN_DELTA = 0.001
 
-# Choose: 'fasttext', 'bilstm', 'bilstm_avgpool', 'bilstm_attention'
-MODEL_NAME = 'bilstm_attention' 
+# 决策阈值：判定"事实/谣言"的分界，由 search_threshold.py 在验证集上搜出来后写回这里
+DECISION_THRESHOLD = 0.5
+# 模糊带半宽：系统层面的人工复核成本参数，与上面的分界线不是一回事
+BAND_HALF_WIDTH = 0.07
