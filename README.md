@@ -194,17 +194,20 @@ python scripts/search_threshold.py --all
 
 Kaggle 只作为算力，数据处理在本地完成：
 
-1. 本地跑完 `utils/preprocess.py`；
+1. 本地跑完 `utils/preprocess.py`（**Kaggle 上不要跑**，脚本会直接提示并退出）；
 2. 将 `data/processed/` 打包上传为 Kaggle Dataset，命名 `mcfend-processed-data`；
 3. Notebook 里 Add Data 挂载该数据集，并克隆本仓库；
 4. 直接 `python scripts/run_all.py`。
 
-`config.py` 会自动在以下两个位置之间找到实际挂载路径：
+`config.py` 会按「约定名 → 自动扫描」两级策略找挂载路径：
 
 ```
 /kaggle/input/mcfend-processed-data/processed
 /kaggle/input/datasets/<用户名>/mcfend-processed-data/processed
+/kaggle/input/*/processed        ← 数据集换了名字也能兜底找到
 ```
+
+判定依据是目录里存在 `vocab.pkl`，所以**数据集叫什么名字都不影响运行**。
 
 注意：`/kaggle/input` 只读；会话结束后 `/kaggle/working` 不保留，训练完请把
 `results/` 与 `checkpoints/` 下载下来。

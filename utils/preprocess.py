@@ -88,6 +88,12 @@ def text_to_indices(tokens, word2idx, max_len):
 
 
 def main():
+    # Kaggle 的 /kaggle/input 是只读挂载区，预处理只应在本地做一次
+    if config.IS_KAGGLE:
+        raise SystemExit(
+            'Kaggle 上不需要跑预处理：请把本地生成的 data/processed 作为 Dataset 挂载，'
+            'config 会自动找到它。')
+
     csv_path = config.RAW_CSV
     if not os.path.exists(csv_path):
         raise FileNotFoundError(f'找不到原始数据：{csv_path}')

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """全局配置：路径、序列长度、超参、阈值、随机种子，全项目只在这里定义一次。"""
+import glob
 import os
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -21,12 +22,30 @@ RAW_CSV = _first_existing([
     '/kaggle/input/mcfend/mcfend/news.csv',
 ])
 
+def _resolve_kaggle_processed(input_root='/kaggle/input'):
+    """在 Kaggle 的只读挂载区里找到预处理数据。
+
+    先按约定的数据集名尝试，找不到再扫一层 */processed 兜底；
+    这样即使数据集改了名字，只要里面有 vocab.pkl 就能跑起来。
+    """
+    candidates = [
+        os.path.join(input_root, 'mcfend-processed-data', 'processed'),
+        os.path.join(input_root, 'datasets', 'yanghuanhuan05',
+                     'mcfend-processed-data', 'processed'),
+    ]
+    for path in candidates:
+        if os.path.exists(os.path.join(path, 'vocab.pkl')):
+            return path
+    for path in (glob.glob(os.path.join(input_root, '*', 'processed'))
+                 + glob.glob(os.path.join(input_root, '*', '*', 'processed'))):
+        if os.path.exists(os.path.join(path, 'vocab.pkl')):
+            return path
+    return candidates[0]
+
+
 if IS_KAGGLE:
     # Kaggle 上数据以 Dataset 形式只读挂载，产出统一写到 working 目录
-    PROCESSED_DIR = _first_existing([
-        '/kaggle/input/mcfend-processed-data/processed',
-        '/kaggle/input/datasets/yanghuanhuan05/mcfend-processed-data/processed',
-    ])
+    PROCESSED_DIR = _resolve_kaggle_processed()
     WORK_DIR = '/kaggle/working'
 else:
     PROCESSED_DIR = os.path.join(BASE_DIR, 'data', 'processed')
