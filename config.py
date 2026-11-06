@@ -64,10 +64,12 @@ else:
     PROCESSED_DIR = os.path.join(BASE_DIR, 'data', PROCESSED_SUBDIR)
     WORK_DIR = BASE_DIR
 
-CHECKPOINT_DIR = os.path.join(WORK_DIR, 'checkpoints')
-LOGS_DIR = os.path.join(WORK_DIR, 'logs')
-FIGURES_DIR = os.path.join(WORK_DIR, 'figures')
-RESULTS_DIR = os.path.join(WORK_DIR, 'results')
+# 输出目录按划分方式加后缀：跑对照组（random）时不会覆盖主实验（group）的权重与结果
+_RUN_SUFFIX = '' if SPLIT_MODE == 'group' else '_' + SPLIT_MODE
+CHECKPOINT_DIR = os.path.join(WORK_DIR, 'checkpoints' + _RUN_SUFFIX)
+LOGS_DIR = os.path.join(WORK_DIR, 'logs' + _RUN_SUFFIX)
+FIGURES_DIR = os.path.join(WORK_DIR, 'figures' + _RUN_SUFFIX)
+RESULTS_DIR = os.path.join(WORK_DIR, 'results' + _RUN_SUFFIX)
 
 
 def ensure_dir(path):
