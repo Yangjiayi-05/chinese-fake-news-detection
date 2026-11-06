@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
 """模型间差异的配对 bootstrap 显著性检验。
 
-回答的问题：「Attention 比 AvgPool 高出的那一个点，是真实差异还是随机波动？」
+回答的问题：「核心模型比基线高出的那几个点，是真实差异还是随机波动？」
 
 做法：同一测试集上，有放回重采样样本，同时重算两个模型的 Macro-F1，
 得到「差值」的分布，取 2.5% / 97.5% 分位点作为 95% 置信区间。
 区间不跨 0，才判定为显著优于。
 
 用法（项目根目录）：
-    python scripts/compare_models.py                       # 每个主模型 vs Attention
-    python scripts/compare_models.py --a bilstm_avgpool --b bilstm_attention
+    python scripts/compare_models.py                       # 每个基线 vs 核心
+    python scripts/compare_models.py --a bilstm --b bilstm_attention
 """
 import argparse
 import os

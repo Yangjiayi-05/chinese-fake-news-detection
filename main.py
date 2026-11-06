@@ -23,7 +23,6 @@ import config
 from models.bilstm import BiLSTM_NoAttention
 from models.bilstm_attention import BiLSTM_Attention
 from models.bilstm_attention_nomask import BiLSTM_Attention_NoMask
-from models.bilstm_avgpool import BiLSTM_AvgPool
 from models.fasttext import FastText
 from utils.helper import create_data_loader, evaluate, train_epoch
 
@@ -50,9 +49,6 @@ def build_model(model_name, vocab_size):
     if model_name == 'bilstm':
         return BiLSTM_NoAttention(vocab_size, config.EMBEDDING_DIM,
                                   config.HIDDEN_DIM, **kwargs)
-    if model_name == 'bilstm_avgpool':
-        return BiLSTM_AvgPool(vocab_size, config.EMBEDDING_DIM,
-                              config.HIDDEN_DIM, **kwargs)
     if model_name == 'bilstm_attention':
         return BiLSTM_Attention(vocab_size, config.EMBEDDING_DIM,
                                 config.HIDDEN_DIM, **kwargs)

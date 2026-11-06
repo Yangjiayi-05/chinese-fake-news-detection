@@ -16,10 +16,10 @@ figures/
 # 原始数据集：体积大且受使用条款约束，绝不进仓库
 MCFEND_original_dataset/
 
-# 原始数据与中间数据不提交；只放行部署需要的词表
+# 原始数据与中间数据不提交；只放行主实验（分组划分）的词表
 data/raw/
 data/processed/*
-!data/processed/vocab.pkl
+data/processed_time/*
 data/processed_group/*
 !data/processed_group/vocab.pkl
 

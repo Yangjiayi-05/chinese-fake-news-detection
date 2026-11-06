@@ -5,7 +5,7 @@ BiLSTM 编码上下文，自注意力汇聚句向量（带 Padding Mask 屏蔽�
 注意力权重直接用于解释"模型为什么这样判"，并落地为三档预警的人机协同筛查系统。
 
 - **数据**：MCFEND 中文平台合并版，清洗后 17,524 条，7 : 1.5 : 1.5 分层划分
-- **模型**：FastText / BiLSTM / BiLSTM+AvgPool / **BiLSTM+Attention**，4 模型 × 5 种子共 20 次主实验，另加 Mask 消融 5 次
+- **模型**：2 个基线（FastText / BiLSTM）+ 核心（**BiLSTM+Attention**），3 个种子；另做 3 组消融与 2 组划分对照，合计 33 次实验
 - **主指标**：Macro-F1（应对 2.08 : 1 的类别不平衡），另报正类 P/R/F1 与 Accuracy
 - **应用**：Streamlit 三档预警（高置信谣言拦截 / 高置信事实放行 / 模糊区间人工复核）
 
@@ -112,18 +112,19 @@ python3 scripts/search_threshold.py --all
 ├── config.py               # 全局配置：路径、长度、超参、阈值、种子（唯一真源）
 ├── main.py                 # 单次训练，按验证集 Macro-F1 早停与选模型
 ├── inference.py            # 推理：事实概率 + 注意力关键词
-├── models/                 # fasttext / bilstm / bilstm_avgpool / bilstm_attention / attention_nomask
+├── models/                 # fasttext / bilstm / bilstm_attention / bilstm_attention_nomask
 ├── utils/                  # preprocess 数据管线、split 重复簇分组、helper 训练与评估
 ├── scripts/
-│   ├── run_all.py          # 5 个模型 × 5 种子一键跑完，汇总 mean±std
+│   ├── run_all.py          # 按阶段批量跑（main / ablation / reg / all）
 │   ├── search_threshold.py # 验证集搜索阈值 + 模糊带反推 + bootstrap 置信区间
 │   ├── compare_models.py   # 模型间差异的配对 bootstrap 显著性检验
 │   ├── plot_results.py     # 出图：模型对比、训练曲线
 │   └── check_leakage.py    # 训练/测试集内容重叠自检
 ├── data/
 │   ├── raw/                # 原始数据，不入库
-│   ├── processed/          # 随机划分产物（只入库 vocab.pkl）
-│   └── processed_group/    # 分组划分产物（只入库 vocab.pkl）
+│   ├── processed/          # 随机划分（对照，不入库）
+│   ├── processed_group/    # 分组划分（主实验，只入库 vocab.pkl）
+│   └── processed_time/     # 时间切分（对照，不入库）
 ├── requirements.txt
 └── CITATION.cff
 ```
@@ -171,16 +172,18 @@ python utils/preprocess.py
 MAX_LEN=256 截断率：0.76%
 ```
 
-产物：`data/processed/{train,dev,test,vocab}.pkl` 与 `meta.json`。`meta.json` 把份数、
+产物：`data/processed_group/{train,dev,test,vocab}.pkl` 与 `meta.json`。`meta.json` 把份数、
 词表规模、截断率、类别权重全部存档，写论文时直接引用，不必回头猜参数。
 
-**第 2 步 · 20 次主实验（另含 5 次 Mask 消融）**
+**第 2 步 · 按阶段跑实验（33 次）**
 
 ```bash
-python scripts/run_all.py
+python scripts/run_all.py --group reg        # 阶段 0：正则档位，按验证集选优
+python scripts/run_all.py --group main --reg A    # 阶段 1：主实验（A 换成选中的档位）
+python scripts/run_all.py --group ablation --reg A  # 阶段 2：消融
 ```
 
-得到 `results/results.csv`（逐次明细）与 `results/summary.csv`（按模型的 mean ± std）。
+得到 `results/results.csv`（逐次明细）与 `results/summary.csv`（按配置的 mean ± std）。
 
 **第 3 步 · 阈值搜索**
 
@@ -199,7 +202,8 @@ python scripts/search_threshold.py --all
 Kaggle 只作为算力，数据处理在本地完成：
 
 1. 本地跑完 `utils/preprocess.py`（**Kaggle 上不要跑**，脚本会直接提示并退出）；
-2. 将 `data/processed/` 打包上传为 Kaggle Dataset，命名 `mcfend-processed-data`；
+2. 将 `data/processed_group/`（以及对照用的 `processed/`、`processed_time/`）打包上传为
+   Kaggle Dataset，命名 `mcfend-processed-data`；
 3. Notebook 里 Add Data 挂载该数据集，并克隆本仓库；
 4. 直接 `python scripts/run_all.py`。
 
@@ -223,7 +227,7 @@ Kaggle 只作为算力，数据处理在本地完成：
 1. 仓库需包含两个部署产物（`.gitignore` 已放行，需 `-f` 强制添加）：
 
    ```bash
-   git add -f data/processed/vocab.pkl
+   git add -f data/processed_group/vocab.pkl
    git add -f checkpoints/best_bilstm_attention_seed42.pth
    ```
 
@@ -262,14 +266,24 @@ set CFND_SPLIT=random && python utils/preprocess.py   # Windows 生成随机划�
 export CFND_SPLIT=random && python utils/preprocess.py  # Linux/macOS
 ```
 
-跑完 `run_all.py` 后，把 `results/summary.csv` 的四行填进下表（**不要手写数字，直接复制**）：
+跑完 `run_all.py` 后，把 `results/summary.csv` 填进下表（**不要手写数字，直接复制**）：
+
+**主表**
 
 | 模型 | Macro-F1 (mean ± std) | 正类 F1 | Accuracy |
 |---|---|---|---|
 | FastText | 待填 | 待填 | 待填 |
 | BiLSTM | 待填 | 待填 | 待填 |
-| BiLSTM + AvgPool | 待填 | 待填 | 待填 |
-| BiLSTM + Attention | 待填 | 待填 | 待填 |
+| **BiLSTM + Attention** | 待填 | 待填 | 待填 |
+
+**消融表**（`results/results.csv` 中带 `_nocw` / `_now2v` 后缀的行）
+
+| 变体 | Macro-F1 | 相对核心 |
+|---|---|---|
+| 完整模型 | 待填 | — |
+| 去掉 Padding Mask | 待填 | 待填 |
+| 去掉类别权重 | 待填 | 待填 |
+| 去掉词向量初始化 | 待填 | 待填 |
 
 ---
 
