@@ -55,7 +55,8 @@ LABELS = {
 
 def label_of(tag):
     if tag.endswith('_nocw'):
-        return 'Attention 无类别权重'
+        base = tag[:-5].rsplit('_seed', 1)[0]
+        return LABELS.get(base, base) + ' 无类权重'
     if tag.endswith('_now2v'):
         return 'Attention 无词向量'
     if '_reg' in tag:
@@ -103,6 +104,8 @@ def main():
                     help='主实验/消融使用的正则档位')
     ap.add_argument('--models', default='',
                     help='逗号分隔，只跑这些模型（默认全部；对照组只跑核心时用）')
+    ap.add_argument('--no-cw', action='store_true',
+                    help='本次全部关闭类别权重，结果加 _nocw 后缀，不覆盖带权重的结果')
     args = ap.parse_args()
 
     runs = GROUPS[args.group]
@@ -112,6 +115,10 @@ def main():
     if not runs:
         print('没有匹配的配置，检查 --models')
         return
+    if args.no_cw:
+        runs = [(m, dict(kw, use_cw=False,
+                         suffix=kw.get('suffix', '') + '_nocw'))
+                for m, kw in runs if 'use_cw' not in kw]
     print(f'分组：{args.group} | 配置数：{len(runs)} | 次数：{len(runs) * len(config.SEEDS)}')
     print(f'正则档位（主实验/消融）：{args.reg}')
 
