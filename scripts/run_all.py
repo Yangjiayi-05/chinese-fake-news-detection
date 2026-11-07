@@ -1,20 +1,30 @@
 # -*- coding: utf-8 -*-
-"""批量跑实验，按阶段分组。
+"""批量实验：全因子探索 + 主实验 + 消融 + 分组对照。
 
-用法（项目根目录）：
-    python scripts/run_all.py --group all        # 主实验 + 消融（18 次）
-    python scripts/run_all.py --group main       # 只跑主实验（9 次）
-    python scripts/run_all.py --group ablation   # 只跑消融（9 次）
-    python scripts/run_all.py --group reg        # 正则档位选择（9 次，只看验证集）
+设计说明
+--------
+核心模型采用 3（正则）× 2（类别权重）× 2（掩码）× 2（词向量）全因子设计，
+共 24 个配置；每个配置跑 3 个种子，因此 72 次。另外 2 个基线模型与 2 种划分
+对照各 3 次，合计 84 次训练。
 
-产物：
-    results/results.csv    逐次明细
-    results/summary.csv    按配置聚合（mean ± std）
-    results/reg_summary.csv 仅 --group reg 时生成
+同一个配置可能被多个批次引用（例如"基准配置"既是主表的核心行，也是消融与
+正则探索的对照），run() 会比对配置签名并自动跳过，因此重复执行不会重复训练。
+
+用法（项目根目录）
+------------------
+    python scripts/run_all.py --group factorial   # 24 配置 × 3 种子 = 72 次
+    python scripts/run_all.py --group main        # 3 模型（基准配置）= 9 次
+    python scripts/run_all.py --group ablation    # 3 个消融变体 = 9 次
+    python scripts/run_all.py --group reg         # 正则 A/C 两档 = 6 次
+
+分组对照（只看核心模型）：
+    set CFND_SPLIT=random && python scripts/run_all.py --group main --models bilstm_attention
+    set CFND_SPLIT=time   && python scripts/run_all.py --group main --models bilstm_attention
 """
 import argparse
 import csv
 import os
+import re
 import sys
 
 import numpy as np
@@ -24,51 +34,84 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config  # noqa: E402
 from main import run  # noqa: E402
 
-# 主实验：2 个基线 + 核心
-MAIN_RUNS = [(m, dict()) for m in config.MAIN_MODEL_LIST]
+CORE = 'bilstm_attention'
 
-# 消融：一条一个变体，都只改一个变量
+# 最终配置（基准）：正则 B、不使用类别权重、保留掩码、保留词向量
+BASE = dict(reg='B', use_cw=False, use_mask=True, use_w2v=True)
+
+
+def suffix_of(reg, cw, mask, w2v, plain_if_base=True):
+    """因子变体的文件后缀；基准配置用空后缀，方便主表与部署直接引用。"""
+    if plain_if_base and (reg, cw, mask, w2v) == ('B', False, True, True):
+        return ''
+    return f'_r{reg}_c{int(cw)}_m{int(mask)}_v{int(w2v)}'
+
+
+def factorial_runs():
+    """3 × 2 × 2 × 2 = 24 个核心配置。"""
+    runs = []
+    for reg in config.REG_PROFILES:
+        for cw in (False, True):
+            for mask in (True, False):
+                for w2v in (True, False):
+                    runs.append((CORE, dict(
+                        reg=reg, use_cw=cw, use_mask=mask, use_w2v=w2v,
+                        suffix=suffix_of(reg, cw, mask, w2v))))
+    return runs
+
+
+# 主实验：两个基线 + 核心，都是基准配置
+MAIN_RUNS = [(m, dict(**BASE)) for m in config.MAIN_MODEL_LIST]
+
+# 消融：相对基准各关掉一个因素
 ABLATION_RUNS = [
-    ('bilstm_attention_nomask', dict()),                      # 去掉 Padding Mask
-    ('bilstm_attention', dict(use_cw=False, suffix='_nocw')),  # 去掉类别权重
-    ('bilstm_attention', dict(use_w2v=False, suffix='_now2v')),  # 去掉词向量初始化
+    (CORE, dict(reg='B', use_cw=True, use_mask=True, use_w2v=True,
+                suffix=suffix_of('B', True, True, True, plain_if_base=False))),
+    (CORE, dict(reg='B', use_cw=False, use_mask=False, use_w2v=True,
+                suffix=suffix_of('B', False, False, True, plain_if_base=False))),
+    (CORE, dict(reg='B', use_cw=False, use_mask=True, use_w2v=False,
+                suffix=suffix_of('B', False, True, False, plain_if_base=False))),
 ]
 
-# 正则档位选择：只跑核心模型
-REG_RUNS = [('bilstm_attention', dict(reg=r, suffix=f'_reg{r}'))
-            for r in config.REG_PROFILES]
+# 正则探索：只挪正则档位，其余保持基准
+REG_RUNS = [
+    (CORE, dict(reg=r, use_cw=False, use_mask=True, use_w2v=True,
+                suffix=suffix_of(r, False, True, True, plain_if_base=False)))
+    for r in config.REG_PROFILES if r != 'B'
+]
 
 GROUPS = {
+    'factorial': factorial_runs(),
     'main': MAIN_RUNS,
     'ablation': ABLATION_RUNS,
     'reg': REG_RUNS,
-    'all': MAIN_RUNS + ABLATION_RUNS,
+    'all': factorial_runs(),
 }
 
 LABELS = {
     'fasttext': 'FastText',
     'bilstm': 'BiLSTM',
     'bilstm_attention': 'BiLSTM+Attention',
-    'bilstm_attention_nomask': 'Attention 无 Mask',
+    'bilstm_attention_nomask': 'BiLSTM+Attention(no-mask)',
 }
+
+FAC_RE = re.compile(r'_r([ABC])_c([01])_m([01])_v([01])$')
 
 
 def label_of(tag):
-    if tag.endswith('_nocw'):
-        base = tag[:-5].rsplit('_seed', 1)[0]
-        return LABELS.get(base, base) + ' 无类权重'
-    if tag.endswith('_now2v'):
-        return 'Attention 无词向量'
-    if '_reg' in tag:
-        return 'Attention 正则' + tag.split('_reg')[1]
-    base = tag.rsplit('_seed', 1)[0]
-    return LABELS.get(base, base)
+    m = FAC_RE.search(tag)
+    base = FAC_RE.sub('', tag).rsplit('_seed', 1)[0]
+    name = LABELS.get(base, base)
+    if m:
+        reg, cw, mask, w2v = m.groups()
+        return f'{name} {reg}/c{cw}m{mask}v{w2v}'
+    return name
 
 
-def summarize(rows, key='label'):
+def summarize(rows):
     stats = {}
-    for lab in dict.fromkeys(r[key] for r in rows):
-        sub = [r for r in rows if r[key] == lab]
+    for lab in dict.fromkeys(r['label'] for r in rows):
+        sub = [r for r in rows if r['label'] == lab]
         vals = np.array([r['test_macro_f1'] for r in sub], dtype=float)
         devs = np.array([r['dev_macro_f1'] for r in sub], dtype=float)
         stats[lab] = dict(
@@ -83,14 +126,12 @@ def summarize(rows, key='label'):
     return stats
 
 
-def write_summary(path, stats, by_dev=False):
-    """by_dev=True 时按验证集排序（阶段 0 选超参只能看验证集）。"""
-    sort_key = 'dev_mean' if by_dev else 'macro_mean'
+def write_summary(path, stats):
     with open(path, 'w', newline='', encoding='utf-8-sig') as f:
         w = csv.writer(f)
         w.writerow(['label', 'n', 'dev_macro_f1_mean', 'dev_macro_f1_std',
                     'macro_f1_mean', 'macro_f1_std', 'binary_f1_mean', 'acc_mean'])
-        for lab, s in sorted(stats.items(), key=lambda kv: -kv[1][sort_key]):
+        for lab, s in sorted(stats.items(), key=lambda kv: -kv[1]['macro_mean']):
             w.writerow([lab, s['n'],
                         f"{s['dev_mean']:.4f}", f"{s['dev_std']:.4f}",
                         f"{s['macro_mean']:.4f}", f"{s['macro_std']:.4f}",
@@ -99,13 +140,9 @@ def write_summary(path, stats, by_dev=False):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--group', default='all', choices=list(GROUPS))
-    ap.add_argument('--reg', default=config.REG, choices=list(config.REG_PROFILES),
-                    help='主实验/消融使用的正则档位')
+    ap.add_argument('--group', default='factorial', choices=list(GROUPS))
     ap.add_argument('--models', default='',
-                    help='逗号分隔，只跑这些模型（默认全部；对照组只跑核心时用）')
-    ap.add_argument('--no-cw', action='store_true',
-                    help='本次全部关闭类别权重，结果加 _nocw 后缀，不覆盖带权重的结果')
+                    help='逗号分隔，只跑这些模型（默认全部）')
     args = ap.parse_args()
 
     runs = GROUPS[args.group]
@@ -115,22 +152,12 @@ def main():
     if not runs:
         print('没有匹配的配置，检查 --models')
         return
-    if args.no_cw and args.group == 'ablation':
-        print('消融组本身已包含"无类权重"变体，不要叠加 --no-cw')
-        return
-    if args.no_cw:
-        runs = [(m, dict(kw, use_cw=False,
-                         suffix=kw.get('suffix', '') + '_nocw'))
-                for m, kw in runs if 'use_cw' not in kw]
+
     print(f'分组：{args.group} | 配置数：{len(runs)} | 次数：{len(runs) * len(config.SEEDS)}')
-    print(f'正则档位（主实验/消融）：{args.reg}')
 
     rows = []
     for model, kw in runs:
         for seed in config.SEEDS:
-            if args.group != 'reg':
-                kw = dict(kw, reg=args.reg)
-            print(f'\n>>>>>>>>>> {model} | seed={seed} | {kw} <<<<<<<<<<')
             rows.append(run(model, seed, **kw))
 
     config.ensure_dir(config.RESULTS_DIR)
@@ -144,33 +171,18 @@ def main():
         w.writerows(rows)
 
     stats = summarize(rows)
-    is_reg = args.group == 'reg'
-    if is_reg:
-        name = 'reg_summary.csv'
-    elif args.no_cw:
-        name = 'summary_nocw.csv'   # 不覆盖带权重那版汇总
-    else:
-        name = 'summary.csv'
-    out = os.path.join(config.RESULTS_DIR, name)
-    write_summary(out, stats, by_dev=is_reg)
+    out = os.path.join(config.RESULTS_DIR, 'summary.csv')
+    write_summary(out, stats)
 
     print(f'\n逐次结果：{detail}')
     print(f'汇总结果：{out}\n')
-    print('=' * 80)
-    if is_reg:
-        print('阶段 0：按【验证集】Macro-F1 排序，选最高档位（测试集不参与选择）')
-        print(f'{"档位":<18}{"dev Macro-F1":<22}{"test Macro-F1（仅参考）"}')
-        print('-' * 80)
-        for lab, s in sorted(stats.items(), key=lambda kv: -kv[1]['dev_mean']):
-            print(f'{lab:<18}{s["dev_mean"]:.4f} ± {s["dev_std"]:.4f}'
-                  f'{"":<6}{s["macro_mean"]:.4f}')
-    else:
-        print(f'{"配置":<26}{"Macro-F1 (mean ± std)":<26}{"binary F1":<12}')
-        print('-' * 80)
-        for lab, s in sorted(stats.items(), key=lambda kv: -kv[1]['macro_mean']):
-            print(f'{lab:<26}{s["macro_mean"]:.4f} ± {s["macro_std"]:.4f}'
-                  f'{"":<8}{s["binary_mean"]:.4f}')
-    print('=' * 80)
+    print('=' * 78)
+    print(f'{"配置":<32}{"Macro-F1 (mean ± std)":<24}{"binary F1":<10}')
+    print('-' * 78)
+    for lab, s in sorted(stats.items(), key=lambda kv: -kv[1]['macro_mean']):
+        print(f'{lab:<32}{s["macro_mean"]:.4f} ± {s["macro_std"]:.4f}'
+              f'{"":<6}{s["binary_mean"]:.4f}')
+    print('=' * 78)
 
 
 if __name__ == '__main__':

@@ -108,9 +108,9 @@ EPOCHS = 100          # 上限；各模型由早停决定实际轮数（FastText
 PATIENCE = 8
 MIN_DELTA = 0.001
 
-# 开关（默认开启，训练脚本可按变体临时关闭）
+# 开关（默认值即最终配置：不用类别权重、用词向量、开掩码）
 USE_PRETRAINED_EMB = True     # Word2Vec 初始化嵌入层
-USE_CLASS_WEIGHT = True       # 类别加权交叉熵
+USE_CLASS_WEIGHT = False      # 类别加权交叉熵（消融显示无益，最终不采用）
 W2V_WINDOW = 5
 W2V_EPOCHS = 5
 

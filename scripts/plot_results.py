@@ -30,9 +30,9 @@ MAIN = [('fasttext', 'FastText'),
         ('bilstm_attention', 'BiLSTM+Attention')]
 
 ABL = [('bilstm_attention', 'Full model', ''),
-       ('bilstm_attention_nomask', 'w/o Mask', ''),
-       ('bilstm_attention', 'w/o Class Weight', '_nocw'),
-       ('bilstm_attention', 'w/o Word2Vec', '_now2v')]
+       ('bilstm_attention', 'w/o Mask', '_rB_c0_m0_v1'),
+       ('bilstm_attention', 'With Class Weight', '_rB_c1_m1_v1'),
+       ('bilstm_attention', 'w/o Word2Vec', '_rB_c0_m1_v0')]
 
 # 主实验后缀：默认空（带类权重那版）；--suffix _nocw 可画无类权重那版
 MAIN_SUFFIX = ''

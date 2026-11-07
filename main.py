@@ -8,6 +8,7 @@
 """
 import argparse
 import csv
+import glob
 import json
 import os
 import pickle
@@ -39,7 +40,7 @@ def set_seed(seed):
     torch.backends.cudnn.benchmark = False
 
 
-def build_model(model_name, vocab_size):
+def build_model(model_name, vocab_size, use_mask=True):
     if model_name == 'fasttext':
         return FastText(vocab_size, config.EMBEDDING_DIM,
                         output_dim=config.NUM_CLASSES, dropout=config.DROPOUT)
@@ -49,12 +50,11 @@ def build_model(model_name, vocab_size):
     if model_name == 'bilstm':
         return BiLSTM_NoAttention(vocab_size, config.EMBEDDING_DIM,
                                   config.HIDDEN_DIM, **kwargs)
-    if model_name == 'bilstm_attention':
+    if model_name in ('bilstm_attention', 'bilstm_attention_nomask'):
+        # 两个名字走同一份实现，只用 use_mask 区分；nomask 名字保留以兼容旧结果
+        flag = use_mask and model_name != 'bilstm_attention_nomask'
         return BiLSTM_Attention(vocab_size, config.EMBEDDING_DIM,
-                                config.HIDDEN_DIM, **kwargs)
-    if model_name == 'bilstm_attention_nomask':
-        return BiLSTM_Attention_NoMask(vocab_size, config.EMBEDDING_DIM,
-                                       config.HIDDEN_DIM, **kwargs)
+                                config.HIDDEN_DIM, use_mask=flag, **kwargs)
     raise ValueError(f'未知模型：{model_name}')
 
 
@@ -80,7 +80,7 @@ def build_pretrained_embedding(vocab, train_x):
             sentences.append(words)
 
     w2v = Word2Vec(sentences, vector_size=dim, window=config.W2V_WINDOW,
-                   min_count=1, workers=4, epochs=config.W2V_EPOCHS,
+                   min_count=1, workers=1, epochs=config.W2V_EPOCHS,
                    seed=config.SPLIT_SEED)
 
     emb = np.random.normal(0, 0.1, (vocab_size, dim)).astype(np.float32)
@@ -103,22 +103,68 @@ def apply_reg(profile):
     config.WORD_DROPOUT = cfg['WORD_DROPOUT']
 
 
-def run(model_name, seed, reg='A', use_cw=True, use_w2v=True, suffix=''):
+def _signature(model_name, seed, reg, use_cw, use_w2v, use_mask):
+    """把影响训练结果的全部设置打包，用于判断"这个配置是否已经跑过"。"""
+    return {
+        'model': model_name, 'seed': seed, 'reg': reg,
+        'use_cw': bool(use_cw), 'use_w2v': bool(use_w2v),
+        'use_mask': bool(use_mask), 'split': config.SPLIT_MODE,
+        'max_len': config.MAX_LEN, 'epochs': config.EPOCHS,
+        'patience': config.PATIENCE, 'dropout': config.DROPOUT,
+        'weight_decay': config.WEIGHT_DECAY,
+        'word_dropout': config.WORD_DROPOUT,
+        'lr': config.LEARNING_RATE, 'batch': config.BATCH_SIZE,
+        'emb': config.EMBEDDING_DIM, 'hidden': config.HIDDEN_DIM,
+        'n_layers': config.N_LAYERS,
+        'label_smoothing': config.LABEL_SMOOTHING,
+    }
+
+
+def _find_same_result(sig):
+    """在已有结果里找配置完全一致的一次运行；找不到返回 None。"""
+    for path in glob.glob(os.path.join(config.RESULTS_DIR, 'result_*.json')):
+        try:
+            with open(path, encoding='utf-8') as f:
+                prev = json.load(f)
+        except (OSError, ValueError):
+            continue
+        if prev.get('signature') == sig:
+            return prev
+    return None
+
+
+def run(model_name, seed, reg='A', use_cw=None, use_w2v=True,
+        use_mask=True, suffix='', force=False):
     """完整跑一次实验，返回指标字典（同时写入 results 目录）。
 
     reg      : 正则档位 A/B/C
     use_cw   : 是否使用类别加权交叉熵
     use_w2v  : 是否用 Word2Vec 初始化嵌入层
-    suffix   : 结果文件后缀（消融变体用，如 _nocw / _now2v）
+    use_mask : 注意力是否屏蔽 <PAD>（仅注意力模型有效）
+    suffix   : 结果文件后缀（全因子变体用，如 _rB_c0_m1_v1）
+    force    : 忽略"已存在"判断，强制重跑
     """
     set_seed(seed)
     apply_reg(reg)
+    if use_cw is None:                       # 默认跟随最终配置（config.USE_CLASS_WEIGHT）
+        use_cw = config.USE_CLASS_WEIGHT
     tag = f'{model_name}_seed{seed}{suffix}'
     for _d in (config.CHECKPOINT_DIR, config.LOGS_DIR, config.RESULTS_DIR):
         config.ensure_dir(_d)
+
+    # 全因子设计里同一个配置可能被多个批次引用，这里直接复用已有结果
+    signature = _signature(model_name, seed, reg, use_cw, use_w2v, use_mask)
+    if not force:
+        prev = _find_same_result(signature)
+        if prev is not None:
+            print(f'[跳过] {tag} 与已完成的 {prev["tag"]} 配置完全一致，复用其结果')
+            reused = dict(prev)
+            reused['reused_as'] = tag
+            return reused
+
     log_path = os.path.join(config.LOGS_DIR, f'log_{tag}.txt')
 
-    print(f'\n===== {tag} | 正则={reg} | 类权重={use_cw} | 词向量={use_w2v} | device={DEVICE} =====')
+    print(f'\n===== {tag} | 正则={reg} | 类权重={use_cw} | 词向量={use_w2v} | 掩码={use_mask} | device={DEVICE} =====')
     with open(log_path, 'w', encoding='utf-8') as log_file:
         def log(msg):
             print(msg)
@@ -151,7 +197,8 @@ def run(model_name, seed, reg='A', use_cw=True, use_w2v=True, suffix=''):
             os.path.join(config.PROCESSED_DIR, 'test.pkl'),
             config.BATCH_SIZE, shuffle=False)
 
-        model = build_model(model_name, len(vocab['word2idx'])).to(DEVICE)
+        model = build_model(model_name, len(vocab['word2idx']),
+                            use_mask=use_mask).to(DEVICE)
 
         # 嵌入层初始化：随机 or Word2Vec 预训练（可训练，不冻结）
         if use_w2v and config.USE_PRETRAINED_EMB and hasattr(model, 'embedding'):
@@ -238,7 +285,8 @@ def run(model_name, seed, reg='A', use_cw=True, use_w2v=True, suffix=''):
 
         result = {
             'tag': tag, 'model': model_name, 'seed': seed, 'reg': reg,
-            'use_cw': use_cw, 'use_w2v': use_w2v,
+            'use_cw': use_cw, 'use_w2v': use_w2v, 'use_mask': use_mask,
+            'signature': signature,
             'max_len': config.MAX_LEN, 'best_epoch': best_epoch,
             'dev_macro_f1': round(float(d_macro), 4),
             'test_acc': round(float(t_acc), 4),
@@ -264,10 +312,18 @@ def main():
                         help='关闭类别加权（消融用）')
     parser.add_argument('--no-w2v', action='store_true',
                         help='关闭 Word2Vec 初始化（消融用）')
+    parser.add_argument('--no-mask', action='store_true',
+                        help='关闭注意力掩码（消融用）')
     parser.add_argument('--suffix', default='', help='结果文件后缀')
+    parser.add_argument('--force', action='store_true',
+                        help='忽略"已跑过"判断，强制重跑')
     args = parser.parse_args()
-    run(args.model, args.seed, reg=args.reg, use_cw=not args.no_class_weight,
-        use_w2v=not args.no_w2v, suffix=args.suffix)
+    run(args.model, args.seed, reg=args.reg,
+        use_cw=not args.no_class_weight,
+        use_w2v=not args.no_w2v,
+        use_mask=not args.no_mask,
+        suffix=args.suffix,
+        force=args.force)
 
 
 if __name__ == '__main__':
