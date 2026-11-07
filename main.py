@@ -296,8 +296,13 @@ def run(model_name, seed, reg='A', use_cw=None, use_w2v=True,
             'test_f1': round(float(t_f1), 4),
             'test_macro_f1': round(float(t_macro), 4),
         }
-        with open(os.path.join(config.RESULTS_DIR, f'result_{tag}.json'), 'w',
-                  encoding='utf-8') as f:
+        result_path = os.path.join(config.RESULTS_DIR, f'result_{tag}.json')
+        if os.path.exists(result_path):
+            with open(result_path, encoding='utf-8') as f:
+                old = json.load(f)
+            if old.get('signature') != signature:
+                log(f'[覆盖] {tag} 已存在另一套配置的结果，本次训练将覆盖它')
+        with open(result_path, 'w', encoding='utf-8') as f:
             json.dump(result, f, ensure_ascii=False, indent=2)
 
     return result

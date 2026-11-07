@@ -36,6 +36,11 @@ from main import run  # noqa: E402
 
 CORE = 'bilstm_attention'
 
+# 逐次结果 csv 的固定列：与单次结果 json 的字段对应
+DETAIL_FIELDS = ['tag', 'model', 'seed', 'reg', 'use_cw', 'use_w2v', 'use_mask',
+                 'best_epoch', 'dev_macro_f1', 'test_acc', 'test_precision',
+                 'test_recall', 'test_f1', 'test_macro_f1', 'label']
+
 # 最终配置（基准）：正则 B、不使用类别权重、保留掩码、保留词向量
 BASE = dict(reg='B', use_cw=False, use_mask=True, use_w2v=True)
 
@@ -166,7 +171,8 @@ def main():
 
     detail = os.path.join(config.RESULTS_DIR, 'results.csv')
     with open(detail, 'w', newline='', encoding='utf-8-sig') as f:
-        w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
+        # 字段固定：复用来的结果会多带 reused_as，这里统一忽略，避免列不一致
+        w = csv.DictWriter(f, fieldnames=DETAIL_FIELDS, extrasaction='ignore')
         w.writeheader()
         w.writerows(rows)
 
