@@ -15,7 +15,7 @@
     python scripts/run_all.py --group factorial   # 24 配置 × 3 种子 = 72 次
     python scripts/run_all.py --group main        # 3 模型（基准配置）= 9 次
     python scripts/run_all.py --group ablation    # 3 个消融变体 = 9 次
-    python scripts/run_all.py --group reg         # 正则 A/C 两档 = 6 次
+    python scripts/run_all.py --group reg         # 正则 A/B/C 三档 = 9 次（B 即基准）
 
 分组对照（只看核心模型）：
     set CFND_SPLIT=random && python scripts/run_all.py --group main --models bilstm_attention
@@ -78,11 +78,12 @@ ABLATION_RUNS = [
                 suffix=suffix_of('B', False, True, False, plain_if_base=False))),
 ]
 
-# 正则探索：只挪正则档位，其余保持基准
+# 正则探索：三档 A/B/C 完整跑一遍；B 档即基准配置，用空后缀，
+# 后续主实验跑到核心模型时会按签名跳过并复用这一组
 REG_RUNS = [
     (CORE, dict(reg=r, use_cw=False, use_mask=True, use_w2v=True,
-                suffix=suffix_of(r, False, True, True, plain_if_base=False)))
-    for r in config.REG_PROFILES if r != 'B'
+                suffix=suffix_of(r, False, True, True)))
+    for r in config.REG_PROFILES
 ]
 
 GROUPS = {
