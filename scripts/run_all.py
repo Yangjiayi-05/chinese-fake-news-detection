@@ -181,6 +181,21 @@ def main():
     out = os.path.join(config.RESULTS_DIR, 'summary.csv')
     write_summary(out, stats)
 
+    # 跳过记录：写明哪个配置复用了哪次已有结果，便于核对"实验没有重复训练"
+    skipped = [r for r in rows if r.get('reused_as')]
+    if skipped:
+        skip_path = os.path.join(config.RESULTS_DIR, 'skipped.csv')
+        with open(skip_path, 'w', newline='', encoding='utf-8-sig') as f:
+            w = csv.writer(f)
+            w.writerow(['本次需要的 tag', '复用的已有结果', '原因'])
+            for r in skipped:
+                w.writerow([r['reused_as'], r['tag'],
+                            '模型/种子/正则/类权重/掩码/词向量/超参完全一致'])
+    print(f'\n本次 {len(runs)} 个配置 × {len(config.SEEDS)} 种子 = {len(rows)} 个槽位：'
+          f'跳过 {len(skipped)} 个（已有相同配置），实际训练 {len(rows) - len(skipped)} 次')
+    if skipped:
+        print(f'跳过明细已写入 {os.path.join(config.RESULTS_DIR, "skipped.csv")}')
+
     print(f'\n逐次结果：{detail}')
     print(f'汇总结果：{out}\n')
     print('=' * 78)

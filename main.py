@@ -158,7 +158,11 @@ def run(model_name, seed, reg='A', use_cw=None, use_w2v=True,
     if not force:
         prev = _find_same_result(signature)
         if prev is not None:
-            print(f'[跳过] {tag} 与已完成的 {prev["tag"]} 配置完全一致，复用其结果')
+            if prev['tag'] == tag:
+                print(f'[跳过] {tag}：该实验已完成，直接复用结果，不重复训练')
+            else:
+                print(f'[跳过] {tag}：模型、种子、正则、类权重、掩码、词向量与超参'
+                      f'均与已完成的 {prev["tag"]} 完全一致，直接复用其结果')
             reused = dict(prev)
             reused['reused_as'] = tag
             return reused
