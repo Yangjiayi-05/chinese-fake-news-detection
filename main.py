@@ -23,7 +23,6 @@ from sklearn.metrics import classification_report
 import config
 from models.bilstm import BiLSTM_NoAttention
 from models.bilstm_attention import BiLSTM_Attention
-from models.bilstm_attention_nomask import BiLSTM_Attention_NoMask
 from models.fasttext import FastText
 from utils.helper import create_data_loader, evaluate, train_epoch
 

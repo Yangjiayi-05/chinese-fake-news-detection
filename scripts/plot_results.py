@@ -89,7 +89,6 @@ def boxplot(groups, title, path, ylabel='Macro-F1 (test set)'):
 
 
 def curves(models, path, title):
-    import glob
     fig, axes = plt.subplots(2, 2, figsize=(11, 7), squeeze=False)
     for idx, (model, label) in enumerate(models):
         ax = axes[idx // 2][idx % 2]
@@ -124,9 +123,9 @@ def curves(models, path, title):
 def curves_ablation(path):
     """消融：每个配置一条 3 种子均值曲线。"""
     specs = [('bilstm_attention', '', 'Full model'),
-             ('bilstm_attention_nomask', '', 'w/o Mask'),
-             ('bilstm_attention', '_nocw', 'w/o Class Weight'),
-             ('bilstm_attention', '_now2v', 'w/o Word2Vec')]
+             ('bilstm_attention', '_rB_c0_m0_v1', 'w/o Mask'),
+             ('bilstm_attention', '_rB_c1_m1_v1', 'With Class Weight'),
+             ('bilstm_attention', '_rB_c0_m1_v0', 'w/o Word2Vec')]
     fig, ax = plt.subplots(figsize=(8, 5))
     for model, suffix, label in specs:
         series = []
