@@ -91,7 +91,19 @@ REG_PROFILES = {
     'B': dict(DROPOUT=0.60, WEIGHT_DECAY=2e-4, WORD_DROPOUT=0.15),
     'C': dict(DROPOUT=0.40, WEIGHT_DECAY=5e-5, WORD_DROPOUT=0.05),
 }
-REG = os.environ.get('CFND_REG', 'B')   # 阶段 0 按验证集选中 B，作为默认档位
+# ==================== 最终配置 ====================
+# 由全因子实验（24 配置）按验证集综合确定，改动只在这里：
+#   reg=C（A/B/C 三档主效应差异仅 0.09，C 与 A 并列最优）
+#   不使用类别权重（主效应 −0.15，不加权略优）
+#   保留 Padding Mask（主效应 +0.19，验证集 +0.36）
+#   保留词向量初始化（主效应 +1.02，C 档消融达 −2.86）
+FINAL_REG = 'C'
+FINAL_USE_CW = False
+FINAL_USE_MASK = True
+FINAL_USE_W2V = True
+
+# 正则档位：阶段 0 / 全因子实验按验证集选定，作为默认档位
+REG = os.environ.get('CFND_REG', FINAL_REG)
 _reg = REG_PROFILES[REG]
 DROPOUT = _reg['DROPOUT']
 WEIGHT_DECAY = _reg['WEIGHT_DECAY']
@@ -108,9 +120,9 @@ EPOCHS = 100          # 上限；各模型由早停决定实际轮数（FastText
 PATIENCE = 8
 MIN_DELTA = 0.001
 
-# 开关（默认值即最终配置：不用类别权重、用词向量、开掩码）
-USE_PRETRAINED_EMB = True     # Word2Vec 初始化嵌入层
-USE_CLASS_WEIGHT = False      # 类别加权交叉熵（消融显示无益，最终不采用）
+# 开关（默认值即最终配置）
+USE_PRETRAINED_EMB = FINAL_USE_W2V   # Word2Vec 初始化嵌入层
+USE_CLASS_WEIGHT = FINAL_USE_CW      # 类别加权交叉熵
 W2V_WINDOW = 5
 W2V_EPOCHS = 5
 

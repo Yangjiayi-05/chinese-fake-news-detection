@@ -33,6 +33,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config  # noqa: E402
 from main import run  # noqa: E402
+from utils.naming import final_cfg, suffix_of, variant_cfg, variant_suffix  # noqa: E402
 
 CORE = 'bilstm_attention'
 
@@ -41,19 +42,15 @@ DETAIL_FIELDS = ['tag', 'model', 'seed', 'reg', 'use_cw', 'use_w2v', 'use_mask',
                  'best_epoch', 'dev_macro_f1', 'test_acc', 'test_precision',
                  'test_recall', 'test_f1', 'test_macro_f1', 'label']
 
-# 最终配置（基准）：正则 B、不使用类别权重、保留掩码、保留词向量
-BASE = dict(reg='B', use_cw=False, use_mask=True, use_w2v=True)
 
-
-def suffix_of(reg, cw, mask, w2v, plain_if_base=True):
-    """因子变体的文件后缀；基准配置用空后缀，方便主表与部署直接引用。"""
-    if plain_if_base and (reg, cw, mask, w2v) == ('B', False, True, True):
-        return ''
-    return f'_r{reg}_c{int(cw)}_m{int(mask)}_v{int(w2v)}'
+def base_kwargs():
+    """基准配置（= config.FINAL_*）对应的 run() 参数。"""
+    c = final_cfg()
+    return dict(reg=c['reg'], use_cw=c['cw'], use_mask=c['mask'], use_w2v=c['w2v'])
 
 
 def factorial_runs():
-    """3 × 2 × 2 × 2 = 24 个核心配置。"""
+    """3 × 2 × 2 × 2 = 24 个核心配置，基准配置用空后缀。"""
     runs = []
     for reg in config.REG_PROFILES:
         for cw in (False, True):
@@ -65,25 +62,24 @@ def factorial_runs():
     return runs
 
 
-# 主实验：两个基线 + 核心，都是基准配置
-MAIN_RUNS = [(m, dict(**BASE)) for m in config.MAIN_MODEL_LIST]
+# 主实验：两个基线 + 核心，都用基准配置
+MAIN_RUNS = [(m, dict(**base_kwargs())) for m in config.MAIN_MODEL_LIST]
 
-# 消融：相对基准各关掉一个因素
+# 消融：相对基准各翻转一个因素
 ABLATION_RUNS = [
-    (CORE, dict(reg='B', use_cw=True, use_mask=True, use_w2v=True,
-                suffix=suffix_of('B', True, True, True, plain_if_base=False))),
-    (CORE, dict(reg='B', use_cw=False, use_mask=False, use_w2v=True,
-                suffix=suffix_of('B', False, False, True, plain_if_base=False))),
-    (CORE, dict(reg='B', use_cw=False, use_mask=True, use_w2v=False,
-                suffix=suffix_of('B', False, True, False, plain_if_base=False))),
+    (CORE, dict(reg=c['reg'], use_cw=c['cw'], use_mask=c['mask'], use_w2v=c['w2v'],
+                suffix=variant_suffix(flip)))
+    for flip in ('cw', 'mask', 'w2v')
+    for c in [variant_cfg(flip)]
 ]
 
-# 正则探索：三档 A/B/C 完整跑一遍；B 档即基准配置，用空后缀，
+# 正则探索：三档 A/B/C 完整跑一遍；最终档用空后缀，
 # 后续主实验跑到核心模型时会按签名跳过并复用这一组
 REG_RUNS = [
-    (CORE, dict(reg=r, use_cw=False, use_mask=True, use_w2v=True,
-                suffix=suffix_of(r, False, True, True)))
+    (CORE, dict(reg=r, use_cw=c['cw'], use_mask=c['mask'], use_w2v=c['w2v'],
+                suffix=suffix_of(r, c['cw'], c['mask'], c['w2v'])))
     for r in config.REG_PROFILES
+    for c in [final_cfg()]
 ]
 
 GROUPS = {

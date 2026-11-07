@@ -24,15 +24,16 @@ from sklearn.metrics import confusion_matrix, f1_score
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config  # noqa: E402
+from utils.naming import variant_suffix  # noqa: E402
 
 MAIN = [('fasttext', 'FastText'),
         ('bilstm', 'BiLSTM'),
         ('bilstm_attention', 'BiLSTM+Attention')]
 
 ABL = [('bilstm_attention', 'Full model', ''),
-       ('bilstm_attention', 'w/o Mask', '_rB_c0_m0_v1'),
-       ('bilstm_attention', 'With Class Weight', '_rB_c1_m1_v1'),
-       ('bilstm_attention', 'w/o Word2Vec', '_rB_c0_m1_v0')]
+       ('bilstm_attention', 'w/o Mask', variant_suffix('mask')),
+       ('bilstm_attention', 'With Class Weight', variant_suffix('cw')),
+       ('bilstm_attention', 'w/o Word2Vec', variant_suffix('w2v'))]
 
 # 主实验后缀：默认空（带类权重那版）；--suffix _nocw 可画无类权重那版
 MAIN_SUFFIX = ''
@@ -123,9 +124,9 @@ def curves(models, path, title):
 def curves_ablation(path):
     """消融：每个配置一条 3 种子均值曲线。"""
     specs = [('bilstm_attention', '', 'Full model'),
-             ('bilstm_attention', '_rB_c0_m0_v1', 'w/o Mask'),
-             ('bilstm_attention', '_rB_c1_m1_v1', 'With Class Weight'),
-             ('bilstm_attention', '_rB_c0_m1_v0', 'w/o Word2Vec')]
+             ('bilstm_attention', variant_suffix('mask'), 'w/o Mask'),
+             ('bilstm_attention', variant_suffix('cw'), 'With Class Weight'),
+             ('bilstm_attention', variant_suffix('w2v'), 'w/o Word2Vec')]
     fig, ax = plt.subplots(figsize=(8, 5))
     for model, suffix, label in specs:
         series = []

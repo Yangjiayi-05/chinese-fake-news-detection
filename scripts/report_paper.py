@@ -17,6 +17,7 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config  # noqa: E402
+from utils.naming import final_cfg, variant_cfg  # noqa: E402
 
 MODEL_CN = {
     'fasttext': 'FastText',
@@ -87,28 +88,34 @@ def main():
         print('没有结果，先跑 scripts/run_all.py')
         return
 
-    base = dict(model='bilstm_attention', split='group', reg='B', cw=0, mask=1, w2v=1)
+    c = final_cfg()
+    base = dict(model='bilstm_attention', split='group',
+                reg=c['reg'], cw=int(c['cw']), mask=int(c['mask']), w2v=int(c['w2v']))
     base_stat = agg(pick(rows, **base))
 
     print(f'\n读取 {len(rows)} 次实验\n')
 
     print('=' * 96)
-    print('表 1 · 主表（分组划分，基准配置）')
+    print(f'表 1 · 主表（分组划分，基准配置 {c["reg"]}）')
     print('-' * 96)
     print(HEAD)
     for m in config.MAIN_MODEL_LIST:
         print(line(MODEL_CN.get(m, m), agg(pick(rows, model=m, split='group',
-                                                reg='B', cw=0, mask=1, w2v=1))))
+                                                reg=c['reg'], cw=int(c['cw']),
+                                                mask=int(c['mask']), w2v=int(c['w2v'])))))
     print('=' * 96)
 
     print('\n表 2 · 消融（相对完整模型）')
     print('-' * 96)
     print(HEAD)
     ref = base_stat['test'] if base_stat else 0.0
-    variants = [('完整模型', base),
-                ('去掉 Padding Mask', dict(base, mask=0)),
-                ('去掉词向量初始化', dict(base, w2v=0)),
-                ('加回类别权重', dict(base, cw=1))]
+    variants = [('完整模型', base)]
+    for flip, name in (('mask', '去掉 Padding Mask'),
+                       ('w2v', '去掉词向量初始化'),
+                       ('cw', '加回类别权重')):
+        v = variant_cfg(flip)
+        variants.append((name, dict(base, cw=int(v['cw']),
+                                    mask=int(v['mask']), w2v=int(v['w2v']))))
     for name, cond in variants:
         print(line(name, agg(pick(rows, **cond)), ref))
 

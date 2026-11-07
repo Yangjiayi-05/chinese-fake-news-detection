@@ -140,7 +140,7 @@ def run(model_name, seed, reg='A', use_cw=None, use_w2v=True,
     use_cw   : 是否使用类别加权交叉熵
     use_w2v  : 是否用 Word2Vec 初始化嵌入层
     use_mask : 注意力是否屏蔽 <PAD>（仅注意力模型有效）
-    suffix   : 结果文件后缀（全因子变体用，如 _rB_c0_m1_v1）
+    suffix   : 结果文件后缀（全因子变体用，如 _rC_c0_m0_v1）
     force    : 忽略"已存在"判断，强制重跑
     """
     set_seed(seed)
