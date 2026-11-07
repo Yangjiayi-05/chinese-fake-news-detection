@@ -119,7 +119,7 @@ python3 scripts/search_threshold.py --all
 ├── models/                 # fasttext / bilstm / bilstm_attention（掩码由 use_mask 开关控制）
 ├── utils/                  # preprocess 数据管线、split 重复簇分组、helper 训练与评估
 ├── scripts/
-│   ├── run_all.py          # 批量实验：factorial / main / ablation / reg 四组
+│   ├── run_all.py          # 批量实验：factorial / main / ablation / reg（reg 含 A/B/C 三档）
 │   ├── search_threshold.py # 验证集搜索阈值 + 模糊带反推 + bootstrap 置信区间
 │   ├── compare_models.py   # 模型间差异的配对 bootstrap 显著性检验
 │   ├── plot_results.py     # 出图：三版箱线图、训练曲线、混淆矩阵
@@ -220,8 +220,18 @@ python scripts/report_paper.py
 （`bilstm_attention_seed42_rB_c0_m1_v1`），划分对照写入 `results_random/`、
 `results_time/`，互不覆盖。
 
-**产物**：`results/all_results.csv`（逐次明细）、`results/summary_all.csv`（按配置聚合）、
-`results/factorial_effects.csv`（主效应与交互，需再跑 `analyze_factorial.py`）。
+**产物**
+
+| 文件 | 内容 |
+|---|---|
+| `results/all_results.csv` | 逐次明细（每次一行） |
+| `results/summary_all.csv` | 按配置聚合的均值 ± 标准差 |
+| `results/skipped.csv` | 本次跳过了哪些配置、复用了哪次结果 |
+| `results/factorial_effects.csv` | 全因子主效应与交互（`analyze_factorial.py` 产出） |
+
+每个分组跑完会在日志里打印一张统计表（配置 / n / dev / test ± std / binary / acc），
+并汇报「本次 X 个配置 × 3 种子 = Y 个槽位：跳过 Z 个，实际训练 W 次」。
+`report_paper.py` 则按论文表格的形式输出主表、消融、正则、划分对照四张表。
 
 **第 3 步 · 阈值搜索**
 
