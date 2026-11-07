@@ -148,6 +148,8 @@ def run(model_name, seed, reg='A', use_cw=None, use_w2v=True,
     apply_reg(reg)
     if use_cw is None:                       # 默认跟随最终配置（config.USE_CLASS_WEIGHT）
         use_cw = config.USE_CLASS_WEIGHT
+    if model_name not in ('bilstm_attention', 'bilstm_attention_nomask'):
+        use_mask = True                      # 两个基线没有注意力，掩码字段对其无意义
     tag = f'{model_name}_seed{seed}{suffix}'
     for _d in (config.CHECKPOINT_DIR, config.LOGS_DIR, config.RESULTS_DIR):
         config.ensure_dir(_d)

@@ -42,12 +42,6 @@ def load_rows():
     return pd.DataFrame(rows)
 
 
-def mean_std(g):
-    return pd.Series({'n': len(g),
-                      'dev_mean': g['dev'].mean(), 'dev_std': g['dev'].std(ddof=1),
-                      'test_mean': g['test'].mean(), 'test_std': g['test'].std(ddof=1)})
-
-
 def main():
     df = load_rows()
     if df.empty:
@@ -57,7 +51,10 @@ def main():
     print(f'读到 {len(df)} 次核心模型实验，覆盖 {df.groupby(["reg", "cw", "mask", "w2v"]).ngroups} 个配置')
 
     table = (df.groupby(['reg', 'cw', 'mask', 'w2v'])
-               .apply(mean_std, include_groups=False).reset_index()
+               .agg(n=('test', 'size'),
+                    dev_mean=('dev', 'mean'), dev_std=('dev', 'std'),
+                    test_mean=('test', 'mean'), test_std=('test', 'std'))
+               .reset_index()
                .sort_values('test_mean', ascending=False))
     table.to_csv(os.path.join(config.RESULTS_DIR, 'factorial_table.csv'),
                  index=False, encoding='utf-8-sig')
