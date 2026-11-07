@@ -134,6 +134,7 @@ python3 scripts/search_threshold.py --all
 │   ├── processed_group/    # 分组划分（主实验，只入库 vocab.pkl）
 │   └── processed_time/     # 时间切分（对照，不入库）
 ├── requirements.txt
+├── 论文实验对照.md          # 论文第四章用哪些实验、选取原则
 └── CITATION.cff
 ```
 
@@ -232,6 +233,8 @@ python scripts/report_paper.py
 每个分组跑完会在日志里打印一张统计表（配置 / n / dev / test ± std / binary / acc），
 并汇报「本次 X 个配置 × 3 种子 = Y 个槽位：跳过 Z 个，实际训练 W 次」。
 `report_paper.py` 则按论文表格的形式输出主表、消融、正则、划分对照四张表。
+
+> 论文正文用到其中哪些配置、按什么原则选取，见 [`论文实验对照.md`](论文实验对照.md)。
 
 **第 3 步 · 阈值搜索**
 
