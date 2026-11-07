@@ -5,7 +5,8 @@ BiLSTM 编码上下文，自注意力汇聚句向量（带 Padding Mask 屏蔽�
 注意力权重直接用于解释"模型为什么这样判"，并落地为三档预警的人机协同筛查系统。
 
 - **数据**：MCFEND 中文平台合并版，清洗后 17,524 条，7 : 1.5 : 1.5 分层划分
-- **模型**：2 个基线（FastText / BiLSTM）+ 核心（**BiLSTM+Attention**），3 个种子；另有 3 组消融、2 组划分对照与 3 档正则选择，合计 **33 次实验**（可选的无类权重基线补跑 6 次另计，共 **39 次**）
+- **模型**：2 个基线（FastText / BiLSTM）+ 核心（**BiLSTM+Attention**）
+- **实验**：核心模型 3（正则）× 2（类权重）× 2（掩码）× 2（词向量）**全因子 24 配置**，每个 3 个种子；另加 2 个基线（各 3 种子）与 2 种划分对照（各 3 种子），共 **28 配置 / 84 次训练**
 - **主指标**：Macro-F1（应对 2.08 : 1 的类别不平衡），另报正类 P/R/F1 与 Accuracy
 - **应用**：Streamlit 三档预警（高置信谣言拦截 / 高置信事实放行 / 模糊区间人工复核）
 
@@ -68,7 +69,8 @@ cd D:\chinese-fake-news-detection
 conda activate nlp
 chcp 65001                      # 控制台切 UTF-8，避免中文日志乱码
 python utils\preprocess.py
-python scripts\run_all.py --group all
+python scripts\run_all.py --group factorial
+python scripts\collect_results.py
 python scripts\search_threshold.py --all
 ```
 
@@ -78,7 +80,8 @@ python scripts\search_threshold.py --all
 cd ~/chinese-fake-news-detection
 python3 -m pip install -r requirements.txt
 python3 utils/preprocess.py
-python3 scripts/run_all.py --group all
+python3 scripts/run_all.py --group factorial
+python3 scripts/collect_results.py
 python3 scripts/search_threshold.py --all
 # 切换正则档位：export CFND_REG=B
 # 切换划分方式：export CFND_SPLIT=random
@@ -89,7 +92,7 @@ python3 scripts/search_threshold.py --all
 ```python
 !git clone https://github.com/Yangjiayi-05/chinese-fake-news-detection.git
 %cd chinese-fake-news-detection
-!python scripts/run_all.py --group all
+!python scripts/run_all.py --group factorial
 ```
 
 ### 2.4 平台差异与已知的坑
@@ -113,15 +116,16 @@ python3 scripts/search_threshold.py --all
 ├── config.py               # 全局配置：路径、长度、超参、阈值、种子（唯一真源）
 ├── main.py                 # 单次训练，按验证集 Macro-F1 早停与选模型
 ├── inference.py            # 推理：事实概率 + 注意力关键词
-├── models/                 # fasttext / bilstm / bilstm_attention / bilstm_attention_nomask
+├── models/                 # fasttext / bilstm / bilstm_attention（掩码由 use_mask 开关控制）
 ├── utils/                  # preprocess 数据管线、split 重复簇分组、helper 训练与评估
 ├── scripts/
-│   ├── run_all.py          # 按阶段批量跑（main / ablation / reg / all）
+│   ├── run_all.py          # 批量实验：factorial / main / ablation / reg 四组
 │   ├── search_threshold.py # 验证集搜索阈值 + 模糊带反推 + bootstrap 置信区间
 │   ├── compare_models.py   # 模型间差异的配对 bootstrap 显著性检验
 │   ├── plot_results.py     # 出图：三版箱线图、训练曲线、混淆矩阵
+│   ├── collect_results.py  # 汇总全部单次结果（分组跑不会互相覆盖）
+│   ├── analyze_factorial.py# 全因子主效应与交互效应
 │   ├── analyze_time.py     # 时间漂移证据、三种划分对比（需原始 CSV）
-│   ├── check_leakage.py    # 训练/测试重叠自检（需原始 CSV）
 │   └── check_leakage.py    # 训练/测试集内容重叠自检
 ├── data/
 │   ├── raw/                # 原始数据，不入库
@@ -178,44 +182,42 @@ MAX_LEN=256 截断率：0.76%
 产物：`data/processed_group/{train,dev,test,vocab}.pkl` 与 `meta.json`。`meta.json` 把份数、
 词表规模、截断率、类别权重全部存档，写论文时直接引用，不必回头猜参数。
 
-**第 2 步 · 按阶段跑实验（33 次）**
+**第 2 步 · 跑实验（84 次）**
 
-| 阶段 | 内容 | 次数 |
+核心模型采用 3（正则）× 2（类权重）× 2（掩码）× 2（词向量）全因子设计：
+
+| 批次 | 内容 | 次数 |
 |---|---|---|
-| 0 | 正则档位 A/B/C（核心模型） | 9 |
-| 1 | 主实验：3 模型 × 3 种子 | 9 |
-| 2 | 消融：无 mask / 无类权重 / 无词向量 | 9 |
-| 3 | 划分对照：随机 + 时间切分（各 3 次） | 6 |
-| | **小计** | **33** |
-| 可选 | 无类权重基线补跑（FastText + BiLSTM） | 6 |
-| | **合计** | **39** |
+| 全因子 | 24 配置 × 3 种子 | 72 |
+| 基线 | FastText、BiLSTM（基准配置） | 6 |
+| 划分对照 | 随机分层、时间切分（仅核心模型） | 6 |
+| | **合计** | **84** |
 
 ```bash
-# 阶段 0：正则档位 A/B/C，只跑核心模型，按验证集选优（9 次）
-python scripts/run_all.py --group reg
+# 全因子（72 次）
+python scripts/run_all.py --group factorial
 
-# 阶段 1：主实验，3 模型 × 3 种子（9 次）；A 换成阶段 0 选中的档位
-python scripts/run_all.py --group main --reg A
+# 基线：核心配置已存在会自动跳过，实际只跑 6 次
+python scripts/run_all.py --group main
 
-# 阶段 2：消融，无 mask / 无类权重 / 无词向量（9 次）
-python scripts/run_all.py --group ablation --reg A
+# 划分对照（各 3 次）
+set CFND_SPLIT=random && python scripts/run_all.py --group main --models bilstm_attention
+set CFND_SPLIT=time   && python scripts/run_all.py --group main --models bilstm_attention
 
-# 阶段 3：划分对照，只跑核心模型（各 3 次）
-set CFND_SPLIT=random && python scripts/run_all.py --group main --reg A --models bilstm_attention
-set CFND_SPLIT=time   && python scripts/run_all.py --group main --reg A --models bilstm_attention
+# 汇总全部单次结果（分组跑会覆盖 summary.csv，这里重建总表）
+python scripts/collect_results.py
 ```
 
-得到 `results/results.csv`（逐次明细）与 `results/summary.csv`（按配置的 mean ± std）。
-对照组写入 `results_random/`、`results_time/`，不会覆盖主实验。
+**同一配置被多个批次引用时不会重复训练**：`main.run()` 会把模型、种子、正则、
+类权重、掩码、词向量、超参打包成签名，已有相同签名就直接复用并打印
+`[跳过] … 配置完全一致`。
 
-**可选 · 无类权重的敏感性分析**（再 6 次，只补两个基线；核心的 `_nocw` 已在消融里跑过。结果加 `_nocw` 后缀，不覆盖原结果）：
+**文件命名**：基准配置用短名（`bilstm_attention_seed42`），因子变体带后缀
+（`bilstm_attention_seed42_rB_c0_m1_v1`），划分对照写入 `results_random/`、
+`results_time/`，互不覆盖。
 
-```bash
-python scripts/run_all.py --group main --reg A --no-cw --models fasttext,bilstm
-python scripts/plot_results.py --suffix _nocw
-```
-
-汇总写入 `results/summary_nocw.csv`，与带权重版本的 `summary.csv` 并存。
+**产物**：`results/all_results.csv`（逐次明细）、`results/summary_all.csv`（按配置聚合）、
+`results/factorial_effects.csv`（主效应与交互，需再跑 `analyze_factorial.py`）。
 
 **第 3 步 · 阈值搜索**
 
@@ -237,7 +239,7 @@ Kaggle 只作为算力，数据处理在本地完成：
 2. 将 `data/processed_group/`（以及对照用的 `processed/`、`processed_time/`）打包上传为
    Kaggle Dataset，命名 `mcfend-processed-data`；
 3. Notebook 里 Add Data 挂载该数据集，并克隆本仓库；
-4. 按阶段跑：`python scripts/run_all.py --group reg` → `main` → `ablation`。
+4. 跑实验：`python scripts/run_all.py --group factorial`，再跑 `main`（基线）与两组划分对照。
 
 `config.py` 会按「约定名 → 自动扫描」两级策略找挂载路径：
 
@@ -277,13 +279,34 @@ Kaggle 只作为算力，数据处理在本地完成：
 | 数据划分 | 7 : 1.5 : 1.5，分层抽样，random_state=42 |
 | 序列长度 | 256（预处理、训练、推理统一） |
 | 词表 | 仅用训练集构建，min_freq=2 |
-| 类别不平衡 | 交叉熵类别权重 0.7407 / 1.5386 + label smoothing 0.05 |
+| 类别不平衡 | 标签平滑 0.05；类别加权作为实验因素（`c1` 时启用 0.7407 / 1.5386），最终配置未采用 |
 | 早停依据 | 验证集 Macro-F1，最大 100 轮，patience=8 |
 | 主指标 | Macro-F1（另报正类 P/R/F1 与 Accuracy） |
 | 阈值 | 验证集网格搜索，测试集只报一次 |
-| 正则档位 | A（0.5 / 1e-4 / 0.10）、B（0.6 / 2e-4 / 0.15）、C（0.4 / 5e-5 / 0.05），阶段 0 按验证集选优 |
+| 正则档位 | A（0.5 / 1e-4 / 0.10）、B（0.6 / 2e-4 / 0.15）、C（0.4 / 5e-5 / 0.05），由全因子实验按验证集确定 |
 
 模型对比统一使用 0.5 默认阈值；系统应用使用搜索得到的最优阈值。
+
+**全因子设计**（核心模型，24 个配置）
+
+| 因素 | 水平 |
+|---|---|
+| 正则强度 | A / B / C |
+| 类别权重 | 有 / 无 |
+| Padding Mask | 有 / 无 |
+| 词向量初始化 | 有 / 无 |
+
+位序为 (类别权重, 掩码, 词向量)，1 = 开启：
+
+| 正则 \ 组合 | 000 | 001 | 010 | 011 | 100 | 101 | 110 | 111 |
+|---|---|---|---|---|---|---|---|---|
+| A | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| B | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| C | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+
+最终配置为 **B / 011**（正则 B、不加权、开掩码、开词向量）。
+消融表的四行取自这 24 格中的 4 个配置：完整模型（B/011）、去掩码（B/001）、
+去词向量（B/010）、加回类权重（B/111）。
 
 **划分方式**由环境变量 `CFND_SPLIT` 决定：
 
@@ -291,6 +314,7 @@ Kaggle 只作为算力，数据处理在本地完成：
 |---|---|---|---|
 | `group`（默认） | 按重复簇分组，同源转载绑在同一侧 | `data/processed_group/` | 主实验，无泄漏 |
 | `random` | 随机分层 7:1.5:1.5 | `data/processed/` | 对照，量化泄漏带来的虚高 |
+| `time` | 按发布时间切分 | `data/processed_time/` | 对照，检验分布漂移 |
 
 ```bash
 python utils/preprocess.py                    # 默认分组划分
@@ -298,7 +322,7 @@ set CFND_SPLIT=random && python utils/preprocess.py   # Windows 生成随机划�
 export CFND_SPLIT=random && python utils/preprocess.py  # Linux/macOS
 ```
 
-跑完 `run_all.py` 后，把 `results/summary.csv` 填进下表（**不要手写数字，直接复制**）：
+跑完 `collect_results.py` 后，把 `results/summary_all.csv` 填进下表（**不要手写数字，直接复制**）：
 
 **主表**
 
@@ -308,14 +332,14 @@ export CFND_SPLIT=random && python utils/preprocess.py  # Linux/macOS
 | BiLSTM | 待填 | 待填 | 待填 |
 | **BiLSTM + Attention** | 待填 | 待填 | 待填 |
 
-**消融表**（`results/results.csv` 中带 `_nocw` / `_now2v` 后缀的行）
+**消融表**（对应全因子中 B 档的 4 个配置，标签形如 `BiLSTM+Attention B/c0m0v1`）
 
-| 变体 | Macro-F1 | 相对核心 |
-|---|---|---|
-| 完整模型 | 待填 | — |
-| 去掉 Padding Mask | 待填 | 待填 |
-| 去掉类别权重 | 待填 | 待填 |
-| 去掉词向量初始化 | 待填 | 待填 |
+| 变体 | 配置 | Macro-F1 | 相对核心 |
+|---|---|---|---|
+| 完整模型 | B/011 | 待填 | — |
+| 去掉 Padding Mask | B/001 | 待填 | 待填 |
+| 去掉词向量初始化 | B/010 | 待填 | 待填 |
+| 加回类别权重 | B/111 | 待填 | 待填 |
 
 ---
 
