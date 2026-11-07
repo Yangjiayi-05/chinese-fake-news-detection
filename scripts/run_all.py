@@ -198,13 +198,16 @@ def main():
 
     print(f'\n逐次结果：{detail}')
     print(f'汇总结果：{out}\n')
-    print('=' * 78)
-    print(f'{"配置":<32}{"Macro-F1 (mean ± std)":<24}{"binary F1":<10}')
-    print('-' * 78)
+    print(f'\n{"=" * 92}')
+    print(f'分组 {args.group} 结果（按测试集 Macro-F1 排序）')
+    print('-' * 92)
+    print(f'{"配置":<30}{"n":>3}   {"dev":<8}{"test Macro-F1":<20}'
+          f'{"binary":<9}{"acc":<8}')
     for lab, s in sorted(stats.items(), key=lambda kv: -kv[1]['macro_mean']):
-        print(f'{lab:<32}{s["macro_mean"]:.4f} ± {s["macro_std"]:.4f}'
-              f'{"":<6}{s["binary_mean"]:.4f}')
-    print('=' * 78)
+        print(f'{lab:<30}{s["n"]:>3}   {s["dev_mean"]:.4f}  '
+              f'{s["macro_mean"]:.4f} ± {s["macro_std"]:.4f}   '
+              f'{s["binary_mean"]:.4f}   {s["acc_mean"]:.4f}')
+    print('=' * 92)
 
 
 if __name__ == '__main__':

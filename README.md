@@ -124,6 +124,7 @@ python3 scripts/search_threshold.py --all
 │   ├── compare_models.py   # 模型间差异的配对 bootstrap 显著性检验
 │   ├── plot_results.py     # 出图：三版箱线图、训练曲线、混淆矩阵
 │   ├── collect_results.py  # 汇总全部单次结果（分组跑不会互相覆盖）
+│   ├── report_paper.py     # 按论文表格输出四张统计表（主表/消融/正则/划分）
 │   ├── analyze_factorial.py# 全因子主效应与交互效应
 │   ├── analyze_time.py     # 时间漂移证据、三种划分对比（需原始 CSV）
 │   └── check_leakage.py    # 训练/测试集内容重叠自检
@@ -206,6 +207,9 @@ set CFND_SPLIT=time   && python scripts/run_all.py --group main --models bilstm_
 
 # 汇总全部单次结果（分组跑会覆盖 summary.csv，这里重建总表）
 python scripts/collect_results.py
+
+# 按论文表格输出统计（主表 / 消融 / 正则 / 划分对照）
+python scripts/report_paper.py
 ```
 
 **同一配置被多个批次引用时不会重复训练**：`main.run()` 会把模型、种子、正则、
