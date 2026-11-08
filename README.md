@@ -402,6 +402,20 @@ export CFND_SPLIT=random && python utils/preprocess.py  # Linux/macOS
 
 ![混淆矩阵](docs/figures/confusion_matrix.png)
 
+**可解释性检查**
+
+注意力权重是否可信，用两个独立实验检验（`scripts/check_attention_faithfulness.py`、
+`scripts/make_human_eval_sheet.py`）：
+
+| 检验 | 做法 | 结果 |
+|---|---|---|
+| 删除检验 | 把注意力 Top-5 内容词替换为 `<UNK>` 后重算预测类置信度 | 下降 0.066；随机删 5 词下降 0.046（**1.5 倍**） |
+| 人工评估 | 60 条样本（谣言/事实各 30）盲评 3 级切题度 | 待 3 位评分者回收后填入 |
+
+两项结果一致：注意力对句子主题有中等指向性，但**因果忠实度有限**。
+因此系统中将注意力高亮定位为人工复核的**线索提示**，而非判定依据——
+这与「注意力权重不等于因果解释」的既有结论一致。
+
 ---
 
 ## 九、常见问题

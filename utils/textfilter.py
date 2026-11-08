@@ -1,10 +1,11 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """词级过滤：挑出可用于展示/删除检验的"内容词"。
 
 注意力权重会落在标点、空格、高频虚词上，这些词对人工阅读没有信息量，
 也不适合作为"关键词"展示。这里用一个轻量规则把它们筛掉，不做词性标注，
 避免引入额外依赖。
 """
+import re
 import unicodedata
 
 STOPWORDS = {
@@ -13,7 +14,11 @@ STOPWORDS = {
     '有', '被', '把', '对', '从', '到', '为', '以', '于', '其', '这', '那',
     '将', '已', '并', '等', '中', '上', '下', '个', '我', '你', '他', '她',
     '它', '很', '还', '又', '才', '只', '但', '却', '则', '所', '之', '者',
+    '年', '月', '日', '号', '时', '分', '秒', '今日', '昨日', '近日', '目前',
 }
+
+# 纯数字、日期、时间碎片：对人工阅读没有信息量，展示与删除检验都排除
+_NUMERIC = re.compile(r'^[\d\.,:/\-年月日号时分秒]+$')
 
 
 def is_content_token(tok):
@@ -26,5 +31,9 @@ def is_content_token(tok):
     if all(unicodedata.category(ch)[0] in ('P', 'Z', 'S') for ch in t):
         return False
     if t in STOPWORDS:
+        return False
+    if t == '<UNK>' or _NUMERIC.match(t):
+        return False
+    if len(t) == 1 and not ('\u4e00' <= t <= '\u9fff'):
         return False
     return True
