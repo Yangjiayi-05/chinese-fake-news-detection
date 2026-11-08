@@ -356,6 +356,10 @@ export CFND_SPLIT=random && python utils/preprocess.py  # Linux/macOS
 （95% CI [+0.0067, +0.0238]，p=0.000），比 FastText 高 **+0.0462**
 （[+0.0347, +0.0580]，p=0.000），两者均显著。
 
+![模型对比](docs/figures/model_comparison.png)
+
+![消融实验](docs/figures/ablation.png)
+
 **消融表**（对应全因子中最终档的 4 个配置，标签形如 `BiLSTM+Attention C/c0m0v1`）
 
 | 变体 | 配置 | 文件名后缀 | Macro-F1 | 相对核心 |
@@ -383,6 +387,10 @@ export CFND_SPLIT=random && python utils/preprocess.py  # Linux/macOS
 | **分组（本文）** | **0.8789 ± 0.0041** | — |
 | 随机分层 | 0.8848 ± 0.0073 | +0.0059（泄漏虚高） |
 | 时间切分 | 0.5565 ± 0.1095 | −0.3224（分布漂移） |
+
+![训练曲线](docs/figures/training_curves.png)
+
+![混淆矩阵](docs/figures/confusion_matrix.png)
 
 ---
 

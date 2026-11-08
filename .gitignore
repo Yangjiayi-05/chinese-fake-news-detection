@@ -1,4 +1,4 @@
-# Python
+﻿# Python
 __pycache__/
 *.py[cod]
 .ipynb_checkpoints/
@@ -11,7 +11,7 @@ __pycache__/
 # 运行产物
 logs/
 results/
-figures/
+/figures/
 
 # 原始数据集：体积大且受使用条款约束，绝不进仓库
 MCFEND_original_dataset/
