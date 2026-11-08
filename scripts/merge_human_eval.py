@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-"""汇总多评分者的盲评结果：平均分、切题率、Fleiss' kappa。
+"""汇总多评分者的盲评结果：平均切题词数、切题率、Fleiss' kappa。
 
-Fleiss' kappa 用于 3 人及以上、类别为 1/2/3 的名义一致性；
-评分是序数，kappa 偏低时不必强行解释为"标注质量差"，
-也可能是评分者对"切题"的尺度不同，论文里照实报告即可。
+评分是 0~5 的"切题词数"，属于序数数据：
+- 平均切题词数 / 5 即为关键词切题率；
+- Fleiss' kappa 按 0~5 六个类别计算，衡量评分者之间的一致性水平。
 
 用法
 ----
@@ -13,11 +13,14 @@ import glob
 import os
 import sys
 
+import numpy as np
 from openpyxl import load_workbook
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config  # noqa: E402
+
+MAXK = 5
 
 
 def read_scores(path):
@@ -29,13 +32,12 @@ def read_scores(path):
         score = ws.cell(row=r, column=4).value
         if sid is None:
             continue
-        out[sid] = int(score) if score in (1, 2, 3) else None
+        out[sid] = int(score) if isinstance(score, (int, float)) and 0 <= score <= MAXK else None
     return out
 
 
 def fleiss_kappa(table):
-    """table: 行=样本，列=类别计数（1/2/3）。"""
-    n_subj, n_cat = table.shape
+    """table: 行=样本，列=类别计数（0~5 共 6 类）。"""
     n_rat = table.sum(axis=1)
     if n_rat.min() == 0:
         return float('nan')
@@ -63,40 +65,37 @@ def main():
     print(f'读取 {len(files)} 份评分表：{", ".join(raters)}')
     print(f'样本 {len(ids)} 条\n')
 
-    import numpy as np
-    table = np.zeros((len(ids), 3), dtype=int)
-    report = []
+    table = np.zeros((len(ids), MAXK + 1), dtype=int)
+    detail = []
     for i, sid in enumerate(ids):
-        for k, r in enumerate(raters):
-            s = per_rater[r].get(sid)
-            if s in (1, 2, 3):
-                table[i, s - 1] += 1
-        vals = [per_rater[r].get(sid) for r in raters if per_rater[r].get(sid) in (1, 2, 3)]
-        report.append((sid, vals))
+        vals = [per_rater[r].get(sid) for r in raters]
+        vals = [v for v in vals if v is not None]
+        for v in vals:
+            table[i, v] += 1
+        detail.append((sid, vals))
 
-    valid = [v for v in table.sum(axis=1) if v > 0]
-    print(f'已填样本 {len(valid)} / {len(ids)}')
-
-    all_scores = [s for _, vals in report for s in vals]
+    all_scores = [s for _, vals in detail for s in vals]
+    filled = sum(1 for _, vals in detail if vals)
     if not all_scores:
         print('还没有任何评分')
         return
 
-    mean = sum(all_scores) / len(all_scores)
-    c3 = sum(1 for s in all_scores if s == 3) / len(all_scores)
-    c12 = sum(1 for s in all_scores if s >= 2) / len(all_scores)
+    mean = float(np.mean(all_scores))
+    print(f'已填样本：{filled} / {len(ids)}')
+    print(f'总判断次数：{len(all_scores)}')
+    print(f'\n平均切题词数：{mean:.2f} / {MAXK}（切题率 {mean / MAXK:.1%}）')
 
-    print(f'\n总判断次数：{len(all_scores)}')
-    print(f'平均切题度：{mean:.2f} / 3')
-    print(f'3 分占比  ：{c3:.1%}')
-    print(f'切题率(≥2)：{c12:.1%}')
+    print('\n切题词数分布：')
+    for k in range(MAXK, -1, -1):
+        c = all_scores.count(k)
+        if c:
+            print(f'  {k} 个：{c:3d} 次（{c / len(all_scores):.1%}）')
 
     print('\n各评分者：')
     for r in raters:
-        v = [s for s in per_rater[r].values() if s in (1, 2, 3)]
+        v = [s for s in per_rater[r].values() if s is not None]
         if v:
-            print(f'  {r}：n={len(v)} 平均 {sum(v) / len(v):.2f} '
-                  f'3分 {sum(1 for s in v if s == 3) / len(v):.0%}')
+            print(f'  {r}：n={len(v)} 平均 {np.mean(v):.2f} / {MAXK}')
 
     k = fleiss_kappa(table[table.sum(axis=1) > 0])
     if k == k:
@@ -106,8 +105,8 @@ def main():
     else:
         print("\nFleiss' kappa 无法计算（评分不全）")
 
-    print('\n逐条明细：')
-    for sid, vals in report:
+    print('\n逐条明细（各评分者填写值）：')
+    for sid, vals in detail:
         print(f'  {sid}: {vals}')
 
 

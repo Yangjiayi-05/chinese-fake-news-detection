@@ -62,7 +62,16 @@ def main():
             with torch.no_grad():
                 p1 = float(torch.softmax(model(x), dim=1)[0, 1])
                 w = model.get_attention(x)[0].cpu().numpy()
-            top = sorted(cand or real, key=lambda j: -w[j])[:args.k]
+            # 按注意力排序，去重后取前 k 个，避免同一词重复占位
+            seen, top = set(), []
+            for j in sorted(cand or real, key=lambda j: -w[j]):
+                word = idx2word[x_list[j]]
+                if word in seen:
+                    continue
+                seen.add(word)
+                top.append(j)
+                if len(top) >= args.k:
+                    break
             rows.append(dict(
                 序号=f'{"谣" if label == 0 else "实"}{n:02d}',
                 真实标签='谣言' if label == 0 else '事实',
