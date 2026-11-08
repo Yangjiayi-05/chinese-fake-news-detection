@@ -15,7 +15,8 @@ BiLSTM 编码上下文，自注意力汇聚句向量（带 Padding Mask 屏蔽�
 ## 一、数据来源与致谢
 
 本项目使用 **MCFEND** 数据集，由原作者团队构建并公开发布，仅用于学术研究。
-请遵守其原始许可条款，**不要二次分发原始数据**（`news.csv` / `social_context.csv` / `user.csv`）。
+请遵守其原始许可条款，**不要二次分发原始数据**（
+ews.csv` / `social_context.csv` / `user.csv`）。
 
 > Yupeng Li, Haorui He, Jin Bai, Dacheng Wen.
 > **MCFEND: A Multi-source Benchmark Dataset for Chinese Fake News Detection.**
@@ -103,7 +104,8 @@ python3 scripts/search_threshold.py --all
 | `ModuleNotFoundError: config` | 全平台 | 在 `utils/` 子目录里直接跑脚本导致。`preprocess.py` 已自动把项目根加入 `sys.path`；其他脚本请在项目根目录执行 |
 | `PermissionError` 写 `/kaggle/input` | Kaggle | 该目录只读。产物统一写到 `WORK_DIR`（Kaggle 下为 `/kaggle/working`） |
 | 文件名找不到但明明存在 | Linux / macOS | 分区大小写敏感，`Models/` ≠ `models/`。请严格使用仓库中的小写目录名 |
-| 多进程 DataLoader 报错 | Windows | 本项目 `num_workers=0`（默认），不受影响；若自行调大，务必把入口放在 `if __name__ == '__main__':` 下 |
+| 多进程 DataLoader 报错 | Windows | 本项目 
+um_workers=0`（默认），不受影响；若自行调大，务必把入口放在 `if __name__ == '__main__':` 下 |
 | 显存不足 / 无 GPU | 全平台 | 代码自动降级到 CPU：`DEVICE = cuda if available else cpu`，无需改配置 |
 
 ---
@@ -410,9 +412,10 @@ export CFND_SPLIT=random && python utils/preprocess.py  # Linux/macOS
 | 检验 | 做法 | 结果 |
 |---|---|---|
 | 删除检验 | 把注意力 Top-5 内容词替换为 `<UNK>` 后重算预测类置信度 | 下降 0.066；随机删 5 词下降 0.046（**1.5 倍**） |
-| 人工评估 | 60 条样本（谣言/事实各 30）× 3 位评分者，数 5 个关键词中切题的个数（0~5） | 待回收 |
+| 人工评估 | 30 题二选一（注意力 Top-5 vs 同句随机 5 词），2 位评分者 | 明确选择中注意力组占 **75%**（30/40，p=0.002） |
 
-两项结果一致：注意力对句子主题有中等指向性，但**因果忠实度有限**。
+两项结果一致：注意力关键词比随机词更有信息量（人工二选一 75%、删除检验 1.5 倍），
+但因果忠实度有限（远低于 3~5 倍的强忠实标准）。
 因此系统中将注意力高亮定位为人工复核的**线索提示**，而非判定依据——
 这与「注意力权重不等于因果解释」的既有结论一致。
 
