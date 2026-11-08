@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """生成人工评估表：随机抽取测试样本，附模型判断与注意力关键词。
 
 供论文第五章"可解释性验证"使用。产出 results/human_eval_sheet.csv，
@@ -30,6 +30,8 @@ def main():
     ap.add_argument('--per-class', type=int, default=10, help='每类抽取条数')
     ap.add_argument('--k', type=int, default=5, help='展示的关键词个数')
     ap.add_argument('--seed', type=int, default=7, help='抽样随机种子')
+    ap.add_argument('--min-len', type=int, default=12,
+                    help='只抽内容词不少于该长度的样本，避免过短句子')
     args = ap.parse_args()
 
     with open(os.path.join(config.PROCESSED_DIR, 'vocab.pkl'), 'rb') as f:
@@ -47,7 +49,9 @@ def main():
     rng = np.random.default_rng(args.seed)
     rows = []
     for label in (0, 1):
-        idx = [i for i, y in enumerate(d['y']) if y == label]
+        idx = [i for i, y in enumerate(d['y']) if y == label
+               and sum(1 for t in d['X'][i]
+                       if t != 0 and is_content_token(idx2word[t])) >= args.min_len]
         pick = rng.choice(idx, size=min(args.per_class, len(idx)), replace=False)
         for n, i in enumerate(sorted(pick), 1):
             x_list = d['X'][i]
