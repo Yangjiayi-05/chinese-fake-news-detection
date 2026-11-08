@@ -360,6 +360,18 @@ export CFND_SPLIT=random && python utils/preprocess.py  # Linux/macOS
 
 ![消融实验](docs/figures/ablation.png)
 
+> 消融图只画论文正文使用的两组变体。类别加权作为探索性实验（−0.73 点）未列入图中，
+> 其数值见上表最后一行。
+
+**过拟合与早停**
+
+核心模型在验证集第 6 轮达到峰值（0.8815），此后训练准确率继续上升到接近 100%，
+而验证集回落至约 0.859，呈现典型的过拟合形态。训练采用早停（patience=8）保存
+验证集最优权重，并配合 dropout 0.6、权重衰减 2e-4、词级 dropout 0.15 抑制过拟合。
+最终测试集 0.8789 与验证集峰值相差 0.3 个百分点，说明过拟合段不参与评测、泛化仍然良好。
+
+![过拟合与早停](docs/figures/overfitting.png)
+
 **消融表**（对应全因子中最终档的 4 个配置，标签形如 `BiLSTM+Attention C/c0m0v1`）
 
 | 变体 | 配置 | 文件名后缀 | Macro-F1 | 相对核心 |
@@ -387,8 +399,6 @@ export CFND_SPLIT=random && python utils/preprocess.py  # Linux/macOS
 | **分组（本文）** | **0.8789 ± 0.0041** | — |
 | 随机分层 | 0.8848 ± 0.0073 | +0.0059（泄漏虚高） |
 | 时间切分 | 0.5565 ± 0.1095 | −0.3224（分布漂移） |
-
-![训练曲线](docs/figures/training_curves.png)
 
 ![混淆矩阵](docs/figures/confusion_matrix.png)
 
