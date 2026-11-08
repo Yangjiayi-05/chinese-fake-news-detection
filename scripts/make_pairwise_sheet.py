@@ -37,6 +37,7 @@ def main():
     ap.add_argument('--k', type=int, default=5)
     ap.add_argument('--min-len', type=int, default=12)
     ap.add_argument('--seed', type=int, default=11)
+    ap.add_argument('--tag', default='', help='输出文件名后缀，如 _k8')
     args = ap.parse_args()
 
     with open(os.path.join(config.PROCESSED_DIR, 'vocab.pkl'), 'rb') as f:
@@ -105,7 +106,7 @@ def main():
             ))
 
     rng.shuffle(rows)
-    out = os.path.join(config.RESULTS_DIR, 'pairwise_sheet.csv')
+    out = os.path.join(config.RESULTS_DIR, f'pairwise_sheet{args.tag}.csv')
     config.ensure_dir(config.RESULTS_DIR)
     with open(out, 'w', newline='', encoding='utf-8-sig') as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))

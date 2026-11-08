@@ -1,9 +1,20 @@
 # -*- coding: utf-8 -*-
-"""汇总二选一人工评估：注意力组被选比例、评分者一致性。"""
+"""汇总二选一评估：注意力组被选比例、两组都差/都不错的比例、评分者一致性。
+
+支持四选一（组1 / 组2 / 两组都差 / 两组都不错），
+把"差不多"拆成两个方向后，可以直接量化"两组都不够好"的比例。
+
+用法
+----
+    python scripts/merge_pairwise.py            # 读 k=5 版本
+    python scripts/merge_pairwise.py --tag _k8  # 读 k=8 版本
+"""
+import argparse
 import csv
 import glob
 import os
 import sys
+from math import comb
 
 import numpy as np
 from openpyxl import load_workbook
@@ -12,34 +23,41 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config  # noqa: E402
 
-CATS = ['注意力组', '随机组', '差不多']
+CATS = ['注意力组', '随机组', '两组都差', '两组都不错']
+ALIAS = {'差不多': '两组都差'}  # 兼容旧表的"差不多"
 
 
 def main():
-    rows = list(csv.DictReader(open(os.path.join(config.RESULTS_DIR, 'pairwise_sheet.csv'),
-                                    encoding='utf-8-sig')))
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--tag', default='')
+    args = ap.parse_args()
+
+    src = os.path.join(config.RESULTS_DIR, f'pairwise_sheet{args.tag}.csv')
+    rows = list(csv.DictReader(open(src, encoding='utf-8-sig')))
     att_is = {r['序号']: int(r['注意力组']) for r in rows}
     ids = [r['序号'] for r in rows]
 
-    files = sorted(glob.glob(os.path.join(config.RESULTS_DIR, 'pairwise_rater*.xlsx')))
+    files = sorted(glob.glob(os.path.join(config.RESULTS_DIR,
+                                          f'pairwise{args.tag}_rater*.xlsx')))
     if not files:
-        print('未找到 pairwise_rater*.xlsx')
+        print(f'未找到 pairwise{args.tag}_rater*.xlsx')
         return
 
     rater_votes = {}
     for f in files:
-        tag = os.path.basename(f).replace('pairwise_rater', '').replace('.xlsx', '')
+        tag = os.path.basename(f).replace(f'pairwise{args.tag}_rater', '').replace('.xlsx', '')
         ws = load_workbook(f, data_only=True)['评估表']
         votes = {}
         for r in range(2, ws.max_row + 1):
             sid = ws.cell(row=r, column=1).value
             ans = ws.cell(row=r, column=5).value
-            if sid is None or ans not in ('组1', '组2', '差不多'):
+            if sid is None or ans is None:
                 continue
-            if ans == '差不多':
-                votes[sid] = '差不多'
-            else:
+            ans = ALIAS.get(ans, ans)
+            if ans in ('组1', '组2'):
                 votes[sid] = '注意力组' if int(ans[-1]) == att_is.get(sid) else '随机组'
+            elif ans in ('两组都差', '两组都不错'):
+                votes[sid] = ans
         rater_votes[tag] = votes
 
     tags = list(rater_votes)
@@ -57,14 +75,18 @@ def main():
 
     dec = all_votes.count('注意力组') + all_votes.count('随机组')
     if dec:
-        print(f'\n排除"差不多"后，注意力组被选中率：'
-              f'{all_votes.count("注意力组") / dec:.1%}（n={dec}）')
+        w = all_votes.count('注意力组')
+        p = 2 * sum(comb(dec, i) for i in range(w, dec + 1)) / 2 ** dec
+        print(f'\n明确二选一：{dec} 次，其中注意力组 {w} 次'
+              f'（{w / dec:.1%}，二项检验 p={min(p, 1):.4f}）')
+    bad = all_votes.count('两组都差')
+    print(f'两组都差：{bad} 次（{bad / n:.1%}）')
 
     table = np.zeros((len(ids), len(CATS)), dtype=int)
     for i, sid in enumerate(ids):
         for t in tags:
             v = rater_votes[t].get(sid)
-            if v:
+            if v in CATS:
                 table[i, CATS.index(v)] += 1
     valid = table[table.sum(axis=1) > 0]
     if len(valid) and valid.sum(axis=1).min() > 1:
@@ -78,14 +100,13 @@ def main():
                  else '中等一致' if kappa < 0.6 else '一致性较好')
         print(f"\nFleiss' kappa = {kappa:.3f}（{level}）")
     else:
-        print('\n一致性需要至少 2 位评分者填完同一题才能计算')
+        print('\n一致性需要至少 2 位评分者对同一题打分')
 
     print('\n各评分者：')
     for t in tags:
         v = list(rater_votes[t].values())
         if v:
-            print(f'  {t}：n={len(v)} 注意力 {v.count("注意力组")} / '
-                  f'随机 {v.count("随机组")} / 差不多 {v.count("差不多")}')
+            print(f'  {t}：n={len(v)} ' + ' / '.join(f'{c} {v.count(c)}' for c in CATS))
 
 
 if __name__ == '__main__':
