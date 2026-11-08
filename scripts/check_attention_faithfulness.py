@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """可解释性验证：注意力删除检验（faithfulness）。
 
 思路
@@ -31,6 +31,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config  # noqa: E402
 from main import DEVICE, build_model  # noqa: E402
+from utils.textfilter import is_content_token  # noqa: E402
 
 UNK = 1  # 词表中 <UNK> 的编号
 
@@ -59,18 +60,27 @@ def load_model(vocab_size):
 
 
 def predict_probs(model, x):
+    """返回 (P(事实), P(预测类))。
+
+    删词检验要看的是"模型对自己判断的把握"，所以用预测类的概率：
+    预测谣言时用 1-p，预测事实时用 p。否则多数类占优时符号会反。
+    """
     with torch.no_grad():
         logits = model(x)
-        return torch.softmax(logits, dim=1)[:, 1]  # 事实类概率
+        p1 = torch.softmax(logits, dim=1)[:, 1]
+        p_pred = torch.where(p1 >= 0.5, p1, 1.0 - p1)
+        return p1, p_pred
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--n', type=int, default=300, help='评估样本数')
     ap.add_argument('--k', type=int, default=5, help='删除的词数')
+    ap.add_argument('--out', default=None, help='逐条结果 csv 路径')
     args = ap.parse_args()
 
     vocab = load_vocab()
+    idx2word = vocab['idx2word']
     vocab_size = len(vocab['word2idx'])
     model = load_model(vocab_size)
     X, Y = load_test(args.n)
@@ -81,31 +91,34 @@ def main():
     for x_list, y in zip(X, Y):
         x = torch.tensor([x_list], dtype=torch.long).to(DEVICE)
         real = [i for i, t in enumerate(x_list) if t != 0]
-        if len(real) <= args.k + 1:
+        # 只在内容词中挑选与删除，避免把"删标点"当成无关操作
+        cand = [i for i in real if is_content_token(idx2word[x_list[i]])]
+        if len(cand) <= args.k:
             continue
 
-        p0 = float(predict_probs(model, x)[0])
-        pred0 = int(p0 >= 0.5)
+        p1_0, pp_0 = (float(t) for t in predict_probs(model, x))
+        pred0 = int(p1_0 >= 0.5)
 
         # 注意力权重 → 取权重最高的 k 个真实词
         with torch.no_grad():
             w = model.get_attention(x)[0].cpu().numpy()
-        top = sorted(real, key=lambda i: -w[i])[:args.k]
+        top = sorted(cand, key=lambda i: -w[i])[:args.k]
 
         # 随机选 k 个真实词
-        rand = rng.choice(real, size=args.k, replace=False).tolist()
+        rand = rng.choice(cand, size=args.k, replace=False).tolist()
 
         x_top = x.clone()
         x_top[0, top] = UNK
-        p_top = float(predict_probs(model, x_top)[0])
+        p1_top, pp_top = (float(t) for t in predict_probs(model, x_top))
 
         x_rand = x.clone()
         x_rand[0, rand] = UNK
-        p_rand = float(predict_probs(model, x_rand)[0])
+        p1_rand, pp_rand = (float(t) for t in predict_probs(model, x_rand))
 
-        rows.append(dict(label=y, pred=pred0, p0=p0,
-                         p_top=p_top, p_rand=p_rand,
-                         drop_top=p0 - p_top, drop_rand=p0 - p_rand))
+        rows.append(dict(label=y, pred=pred0,
+                         p_pred0=pp_0, p_pred_top=pp_top, p_pred_rand=pp_rand,
+                         drop_top=pp_0 - pp_top, drop_rand=pp_0 - pp_rand,
+                         flip_top=int((p1_top >= 0.5) != pred0)))
 
     if not rows:
         print('没有可用样本')
@@ -113,25 +126,28 @@ def main():
 
     d_top = np.array([r['drop_top'] for r in rows])
     d_rand = np.array([r['drop_rand'] for r in rows])
-    ratio = d_top.mean() / max(d_rand.mean(), 1e-8)
+    ratio = d_top.mean() / d_rand.mean() if abs(d_rand.mean()) > 0.005 else float('nan')
+    flips = sum(r['flip_top'] for r in rows)
 
     print(f'\n样本数 {len(rows)} | 每条删除 {args.k} 个词'
           f'（替换为 <UNK>，其余不变）\n')
-    print(f'  删除注意力 Top-{args.k} 词：平均置信度下降 {d_top.mean():.4f}')
-    print(f'  随机删除 {args.k} 个词      ：平均置信度下降 {d_rand.mean():.4f}')
+    print(f'  删除注意力 Top-{args.k} 词：预测类置信度平均下降 {d_top.mean():.4f}')
+    print(f'  随机删除 {args.k} 个词      ：预测类置信度平均下降 {d_rand.mean():.4f}')
     print(f'  比值：{ratio:.1f} 倍')
-    print(f'  判定翻转（删 Top-{args.k} 后类别改变）的样本：'
-          f'{sum(1 for r in rows if (r["p_top"] >= 0.5) != (r["pred"] == 1))} / {len(rows)}')
+    print(f'  判定翻转（删 Top-{args.k} 后类别改变）：{flips} / {len(rows)}'
+          f'（{flips / len(rows):.1%}）')
 
     for name, lab in (('谣言（label=0）', 0), ('事实（label=1）', 1)):
         sub = [r for r in rows if r['label'] == lab]
         if sub:
             a = np.mean([r['drop_top'] for r in sub])
             b = np.mean([r['drop_rand'] for r in sub])
-            print(f'  {name}：Δtop {a:.4f} vs Δrandom {b:.4f}（{a / max(b, 1e-8):.1f} 倍）')
+            ratio_s = f'{a / b:.1f} 倍' if abs(b) > 0.005 else '—（分母接近 0）'
+            print(f'  {name}：Δtop {a:.4f} vs Δrandom {b:.4f}'
+                  f'（{ratio_s}，n={len(sub)}）')
 
-    config.ensure_dir(config.RESULTS_DIR)
-    out = os.path.join(config.RESULTS_DIR, 'faithfulness.csv')
+    out = args.out or os.path.join(config.RESULTS_DIR, 'faithfulness.csv')
+    os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
     with open(out, 'w', newline='', encoding='utf-8-sig') as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
         w.writeheader()
