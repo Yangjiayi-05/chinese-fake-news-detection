@@ -1,3 +1,6 @@
+# -*- coding: utf-8 -*-
+"""训练与评估的通用工具：随机种子、指标计算、早停判据。"""
+
 import pickle
 
 import torch

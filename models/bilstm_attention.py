@@ -1,3 +1,6 @@
+# -*- coding: utf-8 -*-
+"""核心模型：BiLSTM + 加性自注意力，use_mask 控制是否屏蔽补零。"""
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

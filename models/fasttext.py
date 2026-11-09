@@ -1,3 +1,6 @@
+# -*- coding: utf-8 -*-
+"""FastText 基线：词向量平均 + 线性分类，作为轻量下限。"""
+
 import torch.nn as nn
 
 

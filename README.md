@@ -119,7 +119,8 @@ um_workers=0`（默认），不受影响；若自行调大，务必把入口放�
 ├── main.py                 # 单次训练，按验证集 Macro-F1 早停与选模型
 ├── inference.py            # 推理：事实概率 + 注意力关键词
 ├── models/                 # fasttext / bilstm / bilstm_attention（掩码由 use_mask 开关控制）
-├── utils/                  # preprocess 数据管线、split 重复簇分组、helper 训练与评估
+├── utils/                  # preprocess 数据管线、split 重复簇分组、helper 训练与评估、
+│                           # textfilter 内容词过滤（去标点/数字/UNK）
 ├── scripts/
 │   ├── run_all.py          # 批量实验：factorial / main / ablation / reg（reg 含 A/B/C 三档）
 │   ├── search_threshold.py # 验证集搜索阈值 + 模糊带反推 + bootstrap 置信区间
@@ -129,19 +130,25 @@ um_workers=0`（默认），不受影响；若自行调大，务必把入口放�
 │   ├── report_paper.py     # 按论文表格输出四张统计表（主表/消融/正则/划分）
 │   ├── analyze_factorial.py# 全因子主效应与交互效应
 │   ├── analyze_time.py     # 时间漂移证据、三种划分对比（需原始 CSV）
-│   └── check_leakage.py    # 训练/测试集内容重叠自检
+│   ├── check_leakage.py    # 训练/测试集内容重叠自检
+│   ├── check_attention_faithfulness.py  # 可解释性：删除检验（faithfulness）
+│   ├── make_pairwise_sheet.py           # 可解释性：生成二选一评估题目
+│   ├── build_pairwise_xlsx.py           # 可解释性：生成评分表（含校准示例）
+│   └── merge_pairwise.py                # 可解释性：胜率与 Fleiss kappa 汇总
 ├── data/
 │   ├── raw/                # 原始数据，不入库
 │   ├── processed/          # 随机划分（对照，不入库）
 │   ├── processed_group/    # 分组划分（主实验，只入库 vocab.pkl）
 │   └── processed_time/     # 时间切分（对照，不入库）
+├── docs/figures/           # README 引用的 4 张结果图（已入库）
+├── checkpoints/            # 只入库最终权重 best_bilstm_attention_seed42.pth
 ├── requirements.txt
 ├── 论文实验对照.md          # 论文第四章用哪些实验、选取原则
 └── CITATION.cff
 ```
 
 运行产物（`logs/` `results/` `checkpoints/` `figures/`）由代码在需要时自动创建，
-不在仓库里预置空目录。
+不在仓库里预置空目录；其中 `checkpoints/` 只保留最终模型权重，便于复现可解释性实验。
 
 ---
 

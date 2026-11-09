@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """可解释性验证：注意力删除检验（faithfulness）。
 
 思路

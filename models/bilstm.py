@@ -1,3 +1,6 @@
+# -*- coding: utf-8 -*-
+"""纯 BiLSTM 基线：不含注意力层，用于验证注意力机制的增量贡献。"""
+
 import torch
 import torch.nn as nn
 
