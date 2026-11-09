@@ -1,4 +1,4 @@
-# 基于深度学习的中文社交媒体虚假新闻检测与应用
+﻿# 基于深度学习的中文社交媒体虚假新闻检测与应用
 
 面向中文社交媒体文本的虚假新闻二分类研究，核心是**轻量级 + 可解释**：
 BiLSTM 编码上下文，自注意力汇聚句向量（带 Padding Mask 屏蔽补零位置），
@@ -406,8 +406,9 @@ export CFND_SPLIT=random && python utils/preprocess.py  # Linux/macOS
 
 **可解释性检查**
 
-注意力权重是否可信，用两个独立实验检验（`scripts/check_attention_faithfulness.py`、
-`scripts/make_human_eval_sheet.py`）：
+注意力权重是否可信，用两个独立实验检验：
+`scripts/check_attention_faithfulness.py`（删除检验）、
+`scripts/make_pairwise_sheet.py` + `build_pairwise_xlsx.py` + `merge_pairwise.py`（二选一人工评估）。
 
 | 检验 | 做法 | 结果 |
 |---|---|---|
