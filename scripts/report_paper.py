@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """按论文表格的形式输出统计结果。
 
 把 results/、results_random/、results_time/ 下的单次结果按配置聚合，
@@ -21,6 +21,7 @@ from utils.naming import final_cfg, variant_cfg  # noqa: E402
 
 MODEL_CN = {
     'fasttext': 'FastText',
+    'textcnn': 'TextCNN',
     'bilstm': 'BiLSTM',
     'bilstm_attention': 'BiLSTM+Attention',
 }
@@ -105,27 +106,37 @@ def main():
                                                 mask=int(c['mask']), w2v=int(c['w2v'])))))
     print('=' * 96)
 
-    print('\n表 2 · 消融（相对完整模型）')
+    ref = base_stat['test'] if base_stat else 0.0
+
+    print('\n表 2 · 结构消融（去掉自注意力层）')
     print('-' * 96)
     print(HEAD)
-    ref = base_stat['test'] if base_stat else 0.0
+    for m, name in (('bilstm', 'BiLSTM（去掉注意力）'),
+                    ('bilstm_attention', 'BiLSTM+Attention（核心）')):
+        print(line(name, agg(pick(rows, model=m, split='group',
+                                  reg=c['reg'], cw=int(c['cw']),
+                                  mask=int(c['mask']), w2v=int(c['w2v']))), ref))
+
+    print('\n表 3 · 配置对照（非消融，说明配置选择）')
+    print('-' * 96)
+    print(HEAD)
     variants = [('完整模型', base)]
     for flip, name in (('mask', '去掉 Padding Mask'),
                        ('w2v', '去掉词向量初始化'),
-                       ('cw', '加回类别权重')):
+                       ('cw', '加回类别权重（探索，未采用）')):
         v = variant_cfg(flip)
         variants.append((name, dict(base, cw=int(v['cw']),
                                     mask=int(v['mask']), w2v=int(v['w2v']))))
     for name, cond in variants:
         print(line(name, agg(pick(rows, **cond)), ref))
 
-    print('\n表 3 · 正则档位')
+    print('\n表 4 · 正则档位')
     print('-' * 96)
     print(HEAD)
     for r in ('A', 'B', 'C'):
         print(line(f'正则 {r}', agg(pick(rows, **dict(base, reg=r))), ref))
 
-    print('\n表 4 · 数据划分对照（仅核心模型）')
+    print('\n表 5 · 数据划分对照（仅核心模型）')
     print('-' * 96)
     print(HEAD)
     for sp in ('group', 'random', 'time'):

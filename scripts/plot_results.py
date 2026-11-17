@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """出图：三版箱线图 + 训练曲线 + 混淆矩阵 + 消融曲线。
 
 产物（figures/）：
@@ -27,6 +27,7 @@ import config  # noqa: E402
 from utils.naming import variant_suffix  # noqa: E402
 
 MAIN = [('fasttext', 'FastText'),
+        ('textcnn', 'TextCNN'),
         ('bilstm', 'BiLSTM'),
         ('bilstm_attention', 'BiLSTM+Attention')]
 
