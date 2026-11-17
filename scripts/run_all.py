@@ -102,7 +102,6 @@ LABELS = {
     'textcnn': 'TextCNN',
     'bilstm': 'BiLSTM',
     'bilstm_attention': 'BiLSTM+Attention',
-    'bilstm_attention_nomask': 'BiLSTM+Attention(no-mask)',
 }
 
 FAC_RE = re.compile(r'_r([ABC])_c([01])_m([01])_v([01])$')

@@ -55,11 +55,9 @@ def build_model(model_name, vocab_size, use_mask=True):
                        num_filters=config.TEXTCNN_NUM_FILTERS,
                        kernel_sizes=config.TEXTCNN_KERNELS,
                        dropout=config.DROPOUT)
-    if model_name in ('bilstm_attention', 'bilstm_attention_nomask'):
-        # 两个名字走同一份实现，只用 use_mask 区分；nomask 名字保留以兼容旧结果
-        flag = use_mask and model_name != 'bilstm_attention_nomask'
+    if model_name == 'bilstm_attention':
         return BiLSTM_Attention(vocab_size, config.EMBEDDING_DIM,
-                                config.HIDDEN_DIM, use_mask=flag, **kwargs)
+                                config.HIDDEN_DIM, use_mask=use_mask, **kwargs)
     raise ValueError(f'未知模型：{model_name}')
 
 
@@ -153,8 +151,8 @@ def run(model_name, seed, reg='A', use_cw=None, use_w2v=True,
     apply_reg(reg)
     if use_cw is None:                       # 默认跟随最终配置（config.USE_CLASS_WEIGHT）
         use_cw = config.USE_CLASS_WEIGHT
-    if model_name not in ('bilstm_attention', 'bilstm_attention_nomask'):
-        use_mask = True                      # 两个基线没有注意力，掩码字段对其无意义
+    if model_name != 'bilstm_attention':
+        use_mask = True                      # 其余模型没有注意力开关，该字段无意义
     tag = f'{model_name}_seed{seed}{suffix}'
     for _d in (config.CHECKPOINT_DIR, config.LOGS_DIR, config.RESULTS_DIR):
         config.ensure_dir(_d)
