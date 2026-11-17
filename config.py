@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """全局配置：路径、序列长度、超参、阈值、随机种子，全项目只在这里定义一次。"""
 import glob
 import os
@@ -80,9 +80,13 @@ LABEL_MAP = {'谣言': 0, '事实': 1}
 
 # ==================== 实验协议 ====================
 SEEDS = [42, 123, 2024]
-MAIN_MODEL_LIST = ['fasttext', 'bilstm', 'bilstm_attention']
-MODEL_LIST = ['fasttext', 'bilstm', 'bilstm_attention', 'bilstm_attention_nomask']
+MAIN_MODEL_LIST = ['fasttext', 'textcnn', 'bilstm', 'bilstm_attention']
+MODEL_LIST = ['fasttext', 'textcnn', 'bilstm', 'bilstm_attention']
 DEFAULT_MODEL = 'bilstm_attention'
+
+# TextCNN 基线：多尺度卷积核与每核通道数
+TEXTCNN_NUM_FILTERS = 100
+TEXTCNN_KERNELS = (3, 4, 5)
 DEPLOY_SEED = 42
 
 # 正则档位：阶段 0 只跑核心模型，依据验证集 Macro-F1 选优，之后固定

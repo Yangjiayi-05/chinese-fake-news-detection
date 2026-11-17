@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """单次训练：一个模型配一个种子。
 
 与旧版的关键区别是"选模型依据"——早停和最优权重都按验证集 Macro-F1 判定，
@@ -23,6 +23,7 @@ from sklearn.metrics import classification_report
 import config
 from models.bilstm import BiLSTM_NoAttention
 from models.bilstm_attention import BiLSTM_Attention
+from models.textcnn import TextCNN
 from models.fasttext import FastText
 from utils.helper import create_data_loader, evaluate, train_epoch
 
@@ -49,6 +50,11 @@ def build_model(model_name, vocab_size, use_mask=True):
     if model_name == 'bilstm':
         return BiLSTM_NoAttention(vocab_size, config.EMBEDDING_DIM,
                                   config.HIDDEN_DIM, **kwargs)
+    if model_name == 'textcnn':
+        return TextCNN(vocab_size, config.EMBEDDING_DIM, config.NUM_CLASSES,
+                       num_filters=config.TEXTCNN_NUM_FILTERS,
+                       kernel_sizes=config.TEXTCNN_KERNELS,
+                       dropout=config.DROPOUT)
     if model_name in ('bilstm_attention', 'bilstm_attention_nomask'):
         # 两个名字走同一份实现，只用 use_mask 区分；nomask 名字保留以兼容旧结果
         flag = use_mask and model_name != 'bilstm_attention_nomask'

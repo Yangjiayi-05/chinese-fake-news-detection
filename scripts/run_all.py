@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """批量实验：全因子探索 + 主实验 + 消融 + 分组对照。
 
 设计说明
@@ -65,11 +65,18 @@ def factorial_runs():
 # 主实验：两个基线 + 核心，都用基准配置
 MAIN_RUNS = [(m, dict(**base_kwargs())) for m in config.MAIN_MODEL_LIST]
 
-# 消融：相对基准各翻转一个因素
+# 消融：只针对模型结构——去掉自注意力层（BiLSTM 即核心模型去掉注意力），
+# 与核心模型使用同一划分、同一配置，仅差一个结构模块
 ABLATION_RUNS = [
+    ('bilstm', dict(**base_kwargs())),
+]
+
+# 配置对照：非结构层面的选项（掩码、词向量初始化），
+# 用于说明"为什么这样配置"，不属于消融
+CONFIG_RUNS = [
     (CORE, dict(reg=c['reg'], use_cw=c['cw'], use_mask=c['mask'], use_w2v=c['w2v'],
                 suffix=variant_suffix(flip)))
-    for flip in ('cw', 'mask', 'w2v')
+    for flip in ('mask', 'w2v')
     for c in [variant_cfg(flip)]
 ]
 
@@ -86,12 +93,13 @@ GROUPS = {
     'factorial': factorial_runs(),
     'main': MAIN_RUNS,
     'ablation': ABLATION_RUNS,
+    'config': CONFIG_RUNS,
     'reg': REG_RUNS,
-    'all': factorial_runs(),
 }
 
 LABELS = {
     'fasttext': 'FastText',
+    'textcnn': 'TextCNN',
     'bilstm': 'BiLSTM',
     'bilstm_attention': 'BiLSTM+Attention',
     'bilstm_attention_nomask': 'BiLSTM+Attention(no-mask)',
