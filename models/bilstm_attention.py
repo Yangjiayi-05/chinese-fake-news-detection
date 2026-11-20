@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""核心模型：BiLSTM + 加性自注意力，use_mask 控制是否屏蔽补零。"""
+"""核心模型：BiLSTM + 点积式自注意力，use_mask 控制是否屏蔽补零。"""
 
 import torch
 import torch.nn as nn
@@ -7,7 +7,7 @@ import torch.nn.functional as F
 
 
 class BiLSTM_Attention(nn.Module):
-    """双向 LSTM + 加性自注意力；use_mask 控制 softmax 前是否屏蔽 <PAD>。
+    """双向 LSTM + 点积式自注意力；use_mask 控制 softmax 前是否屏蔽 <PAD>。
 
     掩码做成开关而不是两份实现：全因子实验里要单独验证"有无掩码"，
     共用同一份代码才能保证除掩码外没有任何结构差异。
